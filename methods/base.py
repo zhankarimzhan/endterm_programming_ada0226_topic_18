@@ -1,4 +1,5 @@
 """Общий интерфейс методов поиска похожего вопроса."""
+import pickle
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -12,6 +13,8 @@ class SimilarityMethod(ABC):
     title: str = ""           # название для пользователя
     preprocessing: str = ""   # какая предобработка используется
     min_score: float = 0.3    # ниже этого порога ответ считается ненайденным
+    fit_seconds: float = 0.0  # время подготовки индекса (заполняет build_methods)
+    memory: float = 0.0       # память индекса, МБ (заполняет build_methods)
 
     def __init__(self, engine=None):
         self.engine = engine
@@ -30,6 +33,11 @@ class SimilarityMethod(ABC):
     @abstractmethod
     def scores(self, query: str) -> np.ndarray:
         """Сходство запроса с каждым вопросом FAQ (массив длины len(faq))."""
+
+    def memory_mb(self) -> float:
+        """Память индекса метода (размер сериализованного состояния без самого FAQ), МБ."""
+        state = {k: v for k, v in self.__dict__.items() if k not in ("faq", "engine")}
+        return len(pickle.dumps(state)) / 2 ** 20
 
     def search(self, query: str, k: int = 3) -> list[dict]:
         """k самых похожих вопросов с ответами и оценкой сходства."""

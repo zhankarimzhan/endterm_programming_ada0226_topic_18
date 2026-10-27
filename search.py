@@ -1,33 +1,43 @@
-"""Подготовка методов поиска по FAQ из базы и запись истории вопросов."""
+"""Подготовка методов поиска по FAQ из базы, сравнение методов на одном запросе и запись в нормализованную схему:
+requests (вопрос) -> method_runs (запуск метода, время) -> candidates (топ-k ответов метода); feedback (оценки)."""
 import logging
 import time
+import uuid
 
 import pandas as pd
 from sqlalchemy import text
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Connection, Engine
 
 from methods import METHOD_CLASSES, SimilarityMethod
 
+# Регистрация метода, его порога и ресурсов (время подготовки, память)
 REGISTER_SQL = text("""
-    INSERT INTO methods (name, preprocessing) VALUES (:name, :prep)
-    ON CONFLICT (name, preprocessing) DO NOTHING
+    INSERT INTO methods (name, preprocessing, title, min_score, fit_seconds, memory_mb, updated_at)
+    VALUES (:name, :prep, :title, :min_score, :fit, :mem, now())
+    ON CONFLICT (name, preprocessing) DO UPDATE
+    SET title = EXCLUDED.title, min_score = EXCLUDED.min_score, fit_seconds = EXCLUDED.fit_seconds,
+        memory_mb = EXCLUDED.memory_mb, updated_at = EXCLUDED.updated_at
 """)
 
-LOG_SQL = text("""
-    INSERT INTO chat_log (user_query, method_id, faq_id, score)
-    SELECT :q, method_id, :faq_id, :score FROM methods WHERE name = :name AND preprocessing = :prep
-    RETURNING log_id
+REQUEST_SQL = text("INSERT INTO requests (request_id, query_text, mode) VALUES (:rid, :q, :mode)")
+
+RUN_SQL = text("""
+    INSERT INTO method_runs (request_id, method_id, latency_ms)
+    SELECT :rid, method_id, :latency FROM methods WHERE name = :name AND preprocessing = :prep
+    RETURNING method_id
 """)
 
-FEEDBACK_SQL = text("UPDATE chat_log SET helpful = :helpful WHERE log_id = :log_id")
-
-# Данные берутся из chat_log; лучший кандидат можно передать явно (когда ответ не выдан, в chat_log faq_id пустой)
-UNANSWERED_SQL = text("""
-    INSERT INTO unanswered_questions (log_id, user_query, method_id, best_faq_id, best_score, reason)
-    SELECT log_id, user_query, method_id, COALESCE(:best_faq_id, faq_id), score, :reason
-    FROM chat_log WHERE log_id = :log_id
-    ON CONFLICT (log_id) DO NOTHING
+CANDIDATE_SQL = text("""
+    INSERT INTO candidates (request_id, method_id, rank, faq_id, score)
+    VALUES (:rid, :method_id, :rank, :faq_id, :score)
 """)
+
+FEEDBACK_SQL = text("""
+    INSERT INTO feedback (request_id, faq_id, helpful) VALUES (:rid, :faq_id, :helpful)
+    ON CONFLICT (request_id, faq_id) DO UPDATE SET helpful = EXCLUDED.helpful, created_at = now()
+""")
+
+UNANSWERED_SQL = text("SELECT reason FROM v_unanswered WHERE request_id = :rid")
 
 
 def load_faq(engine: Engine) -> pd.DataFrame:
@@ -36,45 +46,98 @@ def load_faq(engine: Engine) -> pd.DataFrame:
 
 
 def register_methods(engine: Engine, methods: dict[str, SimilarityMethod]) -> None:
-    """Добавляет методы в таблицу methods (если их там ещё нет)."""
+    """Записывает методы, их пороги и ресурсы в таблицу methods."""
     with engine.begin() as conn:
         for m in methods.values():
-            conn.execute(REGISTER_SQL, {"name": m.name, "prep": m.preprocessing})
+            conn.execute(REGISTER_SQL, {"name": m.name, "prep": m.preprocessing, "title": m.title,
+                                        "min_score": m.min_score, "fit": m.fit_seconds, "mem": m.memory})
 
 
 def build_methods(engine: Engine, names: list[str] | None = None) -> dict[str, SimilarityMethod]:
-    """Создаёт и обучает методы. Метод, который не удалось подготовить (например, нет сети для модели), пропускается."""
+    """Создаёт и обучает методы, замеряя время подготовки и память.
+    Метод, который не удалось подготовить (например, нет сети для модели), пропускается."""
     faq = load_faq(engine)
     methods = {}
     for name in names or METHOD_CLASSES:
         start = time.perf_counter()
         try:
-            methods[name] = METHOD_CLASSES[name](engine=engine).fit(faq)
+            m = METHOD_CLASSES[name](engine=engine).fit(faq)
+            m.fit_seconds = time.perf_counter() - start
+            m.memory = m.memory_mb()
         except Exception:
             logging.exception("Метод %s не удалось подготовить, он будет недоступен", name)
             continue
-        logging.info("Метод %s готов за %.1f с", name, time.perf_counter() - start)
+        methods[name] = m
+        logging.info("Метод %s готов за %.1f с, память %.1f МБ", name, m.fit_seconds, m.memory)
     register_methods(engine, methods)
     return methods
 
 
-def log_question(engine: Engine, query: str, method: SimilarityMethod, faq_id: int | None, score: float | None) -> int | None:
-    """Сохраняет вопрос, метод и найденный ответ в chat_log (без данных о пользователе); возвращает log_id."""
+def timed_search(method: SimilarityMethod, query: str, k: int = 3) -> tuple[list[dict], float]:
+    """Поиск с замером времени; возвращает (результаты, миллисекунды)."""
+    start = time.perf_counter()
+    results = method.search(query, k)
+    return results, (time.perf_counter() - start) * 1000
+
+
+def compare_all(methods: dict[str, SimilarityMethod], query: str, k: int = 3) -> list[dict]:
+    """Запускает все методы на одном запросе. Для каждого метода: результаты, лучший ответ, время, прошёл ли порог."""
+    rows = []
+    for m in methods.values():
+        try:
+            results, ms = timed_search(m, query, k)
+        except Exception:
+            logging.exception("Ошибка поиска (%s)", m.name)
+            continue
+        best = results[0] if results else None
+        rows.append({"method": m, "results": results, "best": best, "latency_ms": ms,
+                     "found": best is not None and best["score"] >= m.min_score})
+    return rows
+
+
+def _log_run(conn: Connection, request_id: str, method: SimilarityMethod, results: list[dict], latency_ms: float) -> None:
+    """Запуск метода и его топ-k кандидатов."""
+    method_id = conn.execute(RUN_SQL, {"rid": request_id, "latency": latency_ms,
+                                       "name": method.name, "prep": method.preprocessing}).scalar()
+    if method_id is None:
+        return
+    conn.execute(CANDIDATE_SQL, [{"rid": request_id, "method_id": method_id, "rank": rank,
+                                  "faq_id": r["faq_id"], "score": r["score"]}
+                                 for rank, r in enumerate(results, start=1)])
+
+
+def log_comparison(engine: Engine, query: str, rows: list[dict]) -> str:
+    """Сохраняет запрос и ответы всех методов (режим сравнения); возвращает request_id."""
+    request_id = str(uuid.uuid4())
     with engine.begin() as conn:
-        return conn.execute(LOG_SQL, {"q": query, "faq_id": faq_id, "score": score,
-                                      "name": method.name, "prep": method.preprocessing}).scalar()
+        conn.execute(REQUEST_SQL, {"rid": request_id, "q": query, "mode": "compare"})
+        for r in rows:
+            if r["results"]:
+                _log_run(conn, request_id, r["method"], r["results"], r["latency_ms"])
+    return request_id
 
 
-def save_feedback(engine: Engine, log_id: int, helpful: bool) -> None:
-    """Отзыв пользователя на ответ: 👍 (True) или 👎 (False)."""
+def log_single(engine: Engine, query: str, method: SimilarityMethod, results: list[dict], latency_ms: float) -> str:
+    """Сохраняет запрос и ответ одного метода; возвращает request_id."""
+    request_id = str(uuid.uuid4())
     with engine.begin() as conn:
-        conn.execute(FEEDBACK_SQL, {"log_id": log_id, "helpful": helpful})
+        conn.execute(REQUEST_SQL, {"rid": request_id, "q": query, "mode": "single"})
+        if results:
+            _log_run(conn, request_id, method, results, latency_ms)
+    return request_id
 
 
-def save_unanswered(engine: Engine, log_id: int, reason: str, best_faq_id: int | None = None) -> None:
-    """Сохраняет вопрос без подходящего ответа: reason = 'not_found' (ничего не найдено) или 'bad_answer' (👎)."""
+def save_feedback(engine: Engine, request_id: str, faq_id: int, helpful: bool) -> None:
+    """Оценка пользователя: подошёл ли ответ faq_id на запрос. Засчитывается методам, вернувшим этот ответ
+    (а при 👍 остальные методы этого запроса считаются ошибившимися) — см. представление v_method_answers."""
     with engine.begin() as conn:
-        conn.execute(UNANSWERED_SQL, {"log_id": log_id, "reason": reason, "best_faq_id": best_faq_id})
+        conn.execute(FEEDBACK_SQL, {"rid": request_id, "faq_id": faq_id, "helpful": helpful})
+
+
+def unanswered_reason(engine: Engine, request_id: str) -> str | None:
+    """'not_found' / 'bad_answer', если запрос остался без подходящего ответа (представление v_unanswered)."""
+    with engine.connect() as conn:
+        return conn.execute(UNANSWERED_SQL, {"rid": request_id}).scalar()
 
 
 if __name__ == "__main__":
@@ -83,7 +146,7 @@ if __name__ == "__main__":
     all_methods = build_methods(get_engine())
     for q in ["как поступить в аиту", "сколько стоит обучение", "есть ли общага"]:
         print(f"\n{q!r}")
-        for m in all_methods.values():
-            best = m.search(q, k=1)[0]
-            mark = "" if best["score"] >= m.min_score else "  (ниже порога)"
-            print(f"  {m.title:<22} [{best['score']:.2f}] {best['question'][:70]}{mark}")
+        for r in compare_all(all_methods, q, k=1):
+            mark = "" if r["found"] else "  (ниже порога)"
+            print(f"  {r['method'].title:<22} [{r['best']['score']:.2f}] {r['latency_ms']:6.1f} мс  "
+                  f"{r['best']['question'][:60]}{mark}")

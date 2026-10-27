@@ -17,6 +17,11 @@ class EmbeddingsMethod(SimilarityMethod):
         self.model = SentenceTransformer(MODEL_NAME, device="cpu")
         self.matrix = self.model.encode(questions, normalize_embeddings=True, batch_size=64, show_progress_bar=False)
 
+    def memory_mb(self) -> float:
+        """Векторы вопросов + веса модели, МБ."""
+        params = sum(p.numel() * p.element_size() for p in self.model.parameters())
+        return (self.matrix.nbytes + params) / 2 ** 20
+
     def scores(self, query: str) -> np.ndarray:
         q = self.model.encode([query], normalize_embeddings=True, show_progress_bar=False)[0]
         return self.matrix @ q   # векторы нормированы, поэтому скалярное произведение = косинусное сходство

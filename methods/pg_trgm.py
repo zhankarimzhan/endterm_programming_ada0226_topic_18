@@ -19,6 +19,11 @@ class PgTrgmMethod(SimilarityMethod):
             raise ValueError("pg_trgm требует подключения к базе (engine)")
         self.position = {int(fid): i for i, fid in enumerate(self.faq["faq_id"])}
 
+    def memory_mb(self) -> float:
+        """Данные хранятся в PostgreSQL: размер таблицы faq вместе с индексами, МБ."""
+        with self.engine.connect() as conn:
+            return conn.execute(text("SELECT pg_total_relation_size('faq')")).scalar() / 2 ** 20
+
     def scores(self, query: str) -> np.ndarray:
         with self.engine.connect() as conn:
             rows = conn.execute(SCORES_SQL, {"q": query}).all()
