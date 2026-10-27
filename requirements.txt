@@ -1,6 +1,14 @@
+# CPU-версия PyTorch (в разы меньше версии с CUDA)
+--extra-index-url https://download.pytorch.org/whl/cpu
 pandas==3.1.0
 pyarrow==26.0.0
 SQLAlchemy==2.1.6
 psycopg2-binary==2.9.13
 python-dotenv==1.2.4
 python-telegram-bot==22.8
+numpy==2.5.4
+scikit-learn==1.9.1
+nltk==3.10.4
+pymorphy3==2.0.6
+torch==2.14.1
+sentence-transformers==6.2.0
