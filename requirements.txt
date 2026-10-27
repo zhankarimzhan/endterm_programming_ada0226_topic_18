@@ -12,3 +12,5 @@ nltk==3.10.4
 pymorphy3==2.0.6
 torch==2.14.1
 sentence-transformers==6.2.0
+streamlit==1.66.1
+plotly==7.1.0
