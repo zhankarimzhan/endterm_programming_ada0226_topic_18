@@ -16,6 +16,17 @@ REGISTER_SQL = text("""
 LOG_SQL = text("""
     INSERT INTO chat_log (user_query, method_id, faq_id, score)
     SELECT :q, method_id, :faq_id, :score FROM methods WHERE name = :name AND preprocessing = :prep
+    RETURNING log_id
+""")
+
+FEEDBACK_SQL = text("UPDATE chat_log SET helpful = :helpful WHERE log_id = :log_id")
+
+# Данные берутся из chat_log; лучший кандидат можно передать явно (когда ответ не выдан, в chat_log faq_id пустой)
+UNANSWERED_SQL = text("""
+    INSERT INTO unanswered_questions (log_id, user_query, method_id, best_faq_id, best_score, reason)
+    SELECT log_id, user_query, method_id, COALESCE(:best_faq_id, faq_id), score, :reason
+    FROM chat_log WHERE log_id = :log_id
+    ON CONFLICT (log_id) DO NOTHING
 """)
 
 
@@ -47,11 +58,23 @@ def build_methods(engine: Engine, names: list[str] | None = None) -> dict[str, S
     return methods
 
 
-def log_question(engine: Engine, query: str, method: SimilarityMethod, faq_id: int | None, score: float | None) -> None:
-    """Сохраняет вопрос, метод и найденный ответ в chat_log (без данных о пользователе)."""
+def log_question(engine: Engine, query: str, method: SimilarityMethod, faq_id: int | None, score: float | None) -> int | None:
+    """Сохраняет вопрос, метод и найденный ответ в chat_log (без данных о пользователе); возвращает log_id."""
     with engine.begin() as conn:
-        conn.execute(LOG_SQL, {"q": query, "faq_id": faq_id, "score": score,
-                               "name": method.name, "prep": method.preprocessing})
+        return conn.execute(LOG_SQL, {"q": query, "faq_id": faq_id, "score": score,
+                                      "name": method.name, "prep": method.preprocessing}).scalar()
+
+
+def save_feedback(engine: Engine, log_id: int, helpful: bool) -> None:
+    """Отзыв пользователя на ответ: 👍 (True) или 👎 (False)."""
+    with engine.begin() as conn:
+        conn.execute(FEEDBACK_SQL, {"log_id": log_id, "helpful": helpful})
+
+
+def save_unanswered(engine: Engine, log_id: int, reason: str, best_faq_id: int | None = None) -> None:
+    """Сохраняет вопрос без подходящего ответа: reason = 'not_found' (ничего не найдено) или 'bad_answer' (👎)."""
+    with engine.begin() as conn:
+        conn.execute(UNANSWERED_SQL, {"log_id": log_id, "reason": reason, "best_faq_id": best_faq_id})
 
 
 if __name__ == "__main__":
