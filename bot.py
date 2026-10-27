@@ -1,5 +1,7 @@
 """Telegram-бот: отвечает на вопросы абитуриентов, находя самый похожий вопрос в FAQ.
-/method — выбор метода поиска, кнопки 👍/👎 — отзыв на ответ,
+По умолчанию — режим сравнения: на каждый вопрос ответы всех методов с оценкой сходства и временем поиска,
+все результаты и отзывы сохраняются в статистику.
+/method — выбор режима (сравнение или один метод), кнопки 👍/👎 — отзыв на ответ,
 /stats — статистика, /app — дашборд в мини-приложении Telegram."""
 import asyncio
 import logging
@@ -12,20 +14,24 @@ from telegram.error import TelegramError
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 from database import check_connection, get_engine
-from search import build_methods, log_question, save_feedback, save_unanswered
+from search import (build_methods, compare_all, log_comparison, log_single, save_feedback, timed_search,
+                    unanswered_reason)
 from stats import format_stats
 
-DEFAULT_METHOD = "tfidf"
+COMPARE = "all"          # режим сравнения всех методов
+DEFAULT_METHOD = COMPARE
+COMPARE_TITLE = "🔀 Все методы (сравнение)"
 MAX_MESSAGE_LEN = 4000   # лимит Telegram — 4096 символов
-REMEMBER_ANSWERS = 20    # сколько последних ответов пользователя помнить для кнопки «не подошёл»
+REMEMBER_ANSWERS = 20    # сколько последних ответов пользователя помнить для кнопок
 
 logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 START_TEXT = ("Привет! Я отвечаю на вопросы о поступлении в Astana IT University.\n"
               "Просто напишите вопрос, например: «Как поступить в AITU?» или «Какие предметы ЕНТ нужны?»\n\n"
-              "Под ответом можно отметить 👍 / 👎 — это помогает улучшать бота.\n"
-              "/method — выбрать метод поиска ответа\n"
+              "По умолчанию я ищу ответ всеми методами сразу и показываю, что нашёл каждый. "
+              "Откройте вариант ответа и отметьте 👍 / 👎 — так считается, какой метод лучше.\n\n"
+              "/method — сравнение всех методов или один метод\n"
               "/stats — статистика\n"
               "/app — дашборд: запросы, ответы, совпадения, предложения")
 
@@ -39,11 +45,21 @@ def dashboard_url() -> str | None:
     return f"{base}/?{urlencode({'key': key})}" if key else base
 
 
+def current_mode(context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Выбор пользователя: COMPARE или имя метода."""
+    name = context.user_data.get("method", DEFAULT_METHOD)
+    return name if name == COMPARE or name in context.bot_data["methods"] else COMPARE
+
+
 def current_method(context: ContextTypes.DEFAULT_TYPE):
-    """Метод, выбранный пользователем (или метод по умолчанию)."""
-    methods = context.bot_data["methods"]
-    name = context.user_data.get("method", context.bot_data["default_method"])
-    return methods.get(name) or methods[context.bot_data["default_method"]]
+    """Выбранный метод (None в режиме сравнения)."""
+    mode = current_mode(context)
+    return None if mode == COMPARE else context.bot_data["methods"][mode]
+
+
+def mode_title(context: ContextTypes.DEFAULT_TYPE) -> str:
+    method = current_method(context)
+    return method.title if method else COMPARE_TITLE
 
 
 def format_answer(question: str, answer_text: str, footer: str = "") -> str:
@@ -52,30 +68,27 @@ def format_answer(question: str, answer_text: str, footer: str = "") -> str:
 
 
 def methods_keyboard(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup:
-    """Кнопки выбора метода; текущий отмечен галочкой."""
-    selected = current_method(context).name
-    buttons = [[InlineKeyboardButton(("✅ " if name == selected else "") + m.title, callback_data=f"method:{name}")]
-               for name, m in context.bot_data["methods"].items()]
+    """Кнопки выбора режима; текущий отмечен галочкой."""
+    selected = current_mode(context)
+    options = [(COMPARE, COMPARE_TITLE)] + [(name, m.title) for name, m in context.bot_data["methods"].items()]
+    buttons = [[InlineKeyboardButton(("✅ " if name == selected else "") + title, callback_data=f"method:{name}")]
+               for name, title in options]
     return InlineKeyboardMarkup(buttons)
 
 
-def feedback_keyboard(log_id: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton("👍 Подошёл", callback_data=f"fb:1:{log_id}"),
-                                  InlineKeyboardButton("👎 Не подошёл", callback_data=f"fb:0:{log_id}")]])
+def feedback_keyboard(faq_id: int, request_id: str) -> InlineKeyboardMarkup:
+    """👍 / 👎 для ответа faq_id на запрос request_id."""
+    return InlineKeyboardMarkup([[InlineKeyboardButton("👍 Подошёл", callback_data=f"cfb:1:{faq_id}:{request_id}"),
+                                  InlineKeyboardButton("👎 Не подошёл", callback_data=f"cfb:0:{faq_id}:{request_id}")]])
 
 
-def alternatives_keyboard(alternatives: list[dict]) -> InlineKeyboardMarkup:
-    """Кнопки с другими похожими вопросами."""
-    return InlineKeyboardMarkup([[InlineKeyboardButton(r["question"][:60], callback_data=f"alt:{r['faq_id']}")]
-                                 for r in alternatives])
-
-
-def remember_answer(context: ContextTypes.DEFAULT_TYPE, log_id: int, method_name: str, results: list[dict]) -> None:
-    """Запоминает варианты ответа, чтобы при 👎 предложить другие."""
-    answers = context.user_data.setdefault("answers", {})
-    answers[log_id] = {"method": method_name, "results": results}
-    for old in list(answers)[:-REMEMBER_ANSWERS]:
-        del answers[old]
+def candidates_keyboard(faq_ids: list[int], request_id: str, faq_index: dict, counts: dict[int, int] | None = None) -> InlineKeyboardMarkup:
+    """Кнопки вариантов ответа: нажатие показывает ответ и кнопки оценки."""
+    def label(i: int, fid: int) -> str:
+        suffix = f" ({counts[fid]})" if counts else ""
+        return f"{i}. {faq_index[fid][0][:45]}{suffix}"
+    return InlineKeyboardMarkup([[InlineKeyboardButton(label(i, fid), callback_data=f"cmp:{fid}:{request_id}")]
+                                 for i, fid in enumerate(faq_ids, start=1)])
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -90,87 +103,158 @@ async def choose_method(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def method_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     name = query.data.split(":", 1)[1]
-    if name in context.bot_data["methods"]:
+    if name == COMPARE or name in context.bot_data["methods"]:
         context.user_data["method"] = name
-    await query.answer(f"Метод: {current_method(context).title}")
-    await query.edit_message_text(f"Метод поиска: {current_method(context).title}", reply_markup=methods_keyboard(context))
+    await query.answer(f"Режим: {mode_title(context)}")
+    await query.edit_message_text(f"Режим поиска: {mode_title(context)}", reply_markup=methods_keyboard(context))
+
+
+def remember_request(context: ContextTypes.DEFAULT_TYPE, request_id: str, mode: str,
+                     found_by: dict[int, list[str]], alternatives: list[int] | None = None) -> None:
+    """Запоминает, какие методы нашли каждый ответ (для подписи при оценке) и запасные варианты (для 👎)."""
+    requests = context.user_data.setdefault("requests", {})
+    requests[request_id] = {"mode": mode, "found_by": found_by, "alternatives": alternatives or []}
+    for old in list(requests)[:-REMEMBER_ANSWERS]:
+        del requests[old]
+
+
+def request_info(context: ContextTypes.DEFAULT_TYPE, request_id: str) -> dict:
+    return context.user_data.get("requests", {}).get(request_id, {"mode": None, "found_by": {}, "alternatives": []})
+
+
+def format_comparison(query: str, rows: list[dict]) -> str:
+    """Сводка: что нашёл каждый метод, сходство и время поиска."""
+    lines = [f"🔀 Сравнение методов: «{query}»", ""]
+    for r in rows:
+        m, best = r["method"], r["best"]
+        score = f"{best['score']:.2f}" if best else "—"
+        head = f"{'✅' if r['found'] else '❌'} {m.title} — {score} · {r['latency_ms']:.1f} мс"
+        if r["found"]:
+            lines += [head, f"      «{best['question'][:90]}»"]
+        else:
+            lines.append(head + " — не найдено (ниже порога)")
+    return "\n".join(lines)[:MAX_MESSAGE_LEN]
+
+
+async def compare_answer(update: Update, context: ContextTypes.DEFAULT_TYPE, query: str) -> None:
+    """Режим сравнения: ответы всех методов + кнопки с найденными вариантами."""
+    engine = context.bot_data["engine"]
+    rows = await asyncio.to_thread(compare_all, context.bot_data["methods"], query, 3)
+    if not rows:
+        await update.message.reply_text("Не удалось выполнить поиск, попробуйте позже.")
+        return
+    try:
+        request_id = await asyncio.to_thread(log_comparison, engine, query, rows)
+    except Exception:
+        logging.exception("Не удалось записать сравнение в базу")
+        request_id = None
+
+    # Разные найденные ответы: какой ответ какими методами найден
+    found_by: dict[int, list[str]] = {}
+    best_score: dict[int, float] = {}
+    for r in rows:
+        if r["found"]:
+            fid = r["best"]["faq_id"]
+            found_by.setdefault(fid, []).append(r["method"].title)
+            best_score[fid] = max(best_score.get(fid, 0), r["best"]["score"])
+    text = format_comparison(query, rows)
+
+    if not found_by:
+        await update.message.reply_text(text + "\n\nНи один метод не нашёл ответа — вопрос сохранён, чтобы дополнить базу.")
+        return
+    order = sorted(found_by, key=lambda fid: (-len(found_by[fid]), -best_score[fid]))
+    keyboard = None
+    if request_id:
+        remember_request(context, request_id, COMPARE, found_by)
+        keyboard = candidates_keyboard(order, request_id, context.bot_data["faq_index"],
+                                       {fid: len(found_by[fid]) for fid in order})
+    await update.message.reply_text(text + "\n\nОткройте вариант ответа и отметьте, подошёл ли (в скобках — сколько методов его нашли):",
+                                    reply_markup=keyboard)
+
+
+async def show_candidate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Полный ответ на выбранный вариант из сравнения + кнопки оценки."""
+    query = update.callback_query
+    _, fid, request_id = query.data.split(":", 2)
+    fid = int(fid)
+    await query.answer()
+    item = context.bot_data["faq_index"].get(fid)
+    if item is None:
+        await query.message.reply_text("Этот вопрос больше не найден в базе.")
+        return
+    methods_found = request_info(context, request_id)["found_by"].get(fid, [])
+    footer = f"\n\n— нашли: {', '.join(methods_found)}" if methods_found else ""
+    await query.message.reply_text(format_answer(*item, footer=footer), reply_markup=feedback_keyboard(fid, request_id))
+
+
+async def choice_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Оценка ответа (оба режима). Сохраняется в feedback; засчитывается методам, вернувшим этот ответ."""
+    query = update.callback_query
+    _, value, fid, request_id = query.data.split(":", 3)
+    helpful, fid = value == "1", int(fid)
+    engine = context.bot_data["engine"]
+    try:
+        await asyncio.to_thread(save_feedback, engine, request_id, fid, helpful)
+        reason = None if helpful else await asyncio.to_thread(unanswered_reason, engine, request_id)
+    except Exception:
+        logging.exception("Не удалось сохранить отзыв")
+        await query.answer("Не удалось сохранить отзыв, попробуйте позже")
+        return
+    await query.answer("Спасибо, сохранено в статистику!")
+    await query.edit_message_reply_markup(reply_markup=None)   # убираем кнопки, чтобы не голосовать дважды
+
+    info = request_info(context, request_id)
+    if helpful:
+        if info["mode"] == COMPARE:
+            methods_found = info["found_by"].get(fid, [])
+            await query.message.reply_text("👍 Засчитано методам: " + (", ".join(methods_found) or "нашедшим этот ответ")
+                                           + ". Остальным методам — 👎.")
+        return
+    if info["alternatives"]:
+        await query.message.reply_text("Возможно, вы имели в виду:",
+                                       reply_markup=candidates_keyboard(info["alternatives"], request_id,
+                                                                        context.bot_data["faq_index"]))
+        info["alternatives"] = []   # предлагаем один раз
+    elif reason:
+        await query.message.reply_text("Ни один найденный ответ не подошёл — вопрос сохранён, чтобы дополнить базу.")
+    else:
+        await query.message.reply_text("👎 Сохранено. Посмотрите другие варианты в сообщении со сравнением выше.")
 
 
 async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     engine = context.bot_data["engine"]
     method = current_method(context)
     query = update.message.text.strip()
+    if method is None:
+        await compare_answer(update, context, query)
+        return
     try:
-        results = await asyncio.to_thread(method.search, query, 3)
+        results, latency = await asyncio.to_thread(timed_search, method, query, 3)
     except Exception:
         logging.exception("Ошибка поиска (%s)", method.name)
         await update.message.reply_text("Не удалось выполнить поиск, попробуйте позже или выберите другой метод: /method")
         return
 
-    best = results[0] if results else None
+    # Запрос и все кандидаты метода сохраняются всегда; «не найдено» вычисляется в базе (порог метода)
     try:
-        if best is None or best["score"] < method.min_score:
-            # Ничего не найдено: сохраняем вопрос и лучшего (непрошедшего порог) кандидата
-            log_id = await asyncio.to_thread(log_question, engine, query, method, None, best["score"] if best else None)
-            if log_id:
-                await asyncio.to_thread(save_unanswered, engine, log_id, "not_found", best["faq_id"] if best else None)
-            await update.message.reply_text("Не нашёл подходящего ответа — вопрос сохранён, чтобы дополнить базу. "
-                                            f"Попробуйте сформулировать иначе или выбрать другой метод: /method\n\n— {method.title}")
-            return
-        log_id = await asyncio.to_thread(log_question, engine, query, method, best["faq_id"], best["score"])
+        request_id = await asyncio.to_thread(log_single, engine, query, method, results, latency)
     except Exception:
         logging.exception("Не удалось записать вопрос в базу")
-        log_id = None
+        request_id = None
 
-    footer = f"\n\n— {method.title}, сходство {best['score']:.2f}"
+    best = results[0] if results else None
+    if best is None or best["score"] < method.min_score:
+        await update.message.reply_text("Не нашёл подходящего ответа — вопрос сохранён, чтобы дополнить базу. "
+                                        f"Попробуйте сформулировать иначе или выбрать другой метод: /method\n\n— {method.title}")
+        return
+
+    footer = f"\n\n— {method.title}, сходство {best['score']:.2f}, {latency:.1f} мс"
     keyboard = None
-    if log_id:
-        remember_answer(context, log_id, method.name, results)
-        keyboard = feedback_keyboard(log_id)
+    if request_id:
+        alternatives = [r["faq_id"] for r in results[1:] if r["score"] >= method.min_score]
+        remember_request(context, request_id, method.name, {best["faq_id"]: [method.title]}, alternatives)
+        keyboard = feedback_keyboard(best["faq_id"], request_id)
     await update.message.reply_text(format_answer(best["question"], best["answer"], footer), reply_markup=keyboard)
-
-
-async def feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработка 👍 / 👎 под ответом."""
-    query = update.callback_query
-    _, value, log_id = query.data.split(":")
-    log_id, helpful = int(log_id), value == "1"
-    engine = context.bot_data["engine"]
-    try:
-        await asyncio.to_thread(save_feedback, engine, log_id, helpful)
-        if not helpful:
-            await asyncio.to_thread(save_unanswered, engine, log_id, "bad_answer")
-    except Exception:
-        logging.exception("Не удалось сохранить отзыв")
-        await query.answer("Не удалось сохранить отзыв, попробуйте позже")
-        return
-
-    await query.answer("Спасибо за отзыв!")
-    await query.edit_message_reply_markup(reply_markup=None)   # убираем кнопки, чтобы не голосовать дважды
-    if helpful:
-        return
-
-    info = context.user_data.get("answers", {}).get(log_id)
-    method = context.bot_data["methods"].get(info["method"]) if info else None
-    alternatives = [r for r in info["results"][1:] if r["score"] >= method.min_score] if method else []
-    if alternatives:
-        await query.message.reply_text("Вопрос сохранён. Возможно, вы имели в виду:",
-                                       reply_markup=alternatives_keyboard(alternatives))
-    else:
-        await query.message.reply_text("Вопрос сохранён, чтобы дополнить базу ответов. "
-                                       "Попробуйте сформулировать иначе или выбрать другой метод: /method")
-
-
-async def alternative_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Показывает ответ на выбранный альтернативный вопрос."""
-    query = update.callback_query
-    faq_id = int(query.data.split(":", 1)[1])
-    item = context.bot_data["faq_index"].get(faq_id)
-    await query.answer()
-    if item is None:
-        await query.message.reply_text("Этот вопрос больше не найден в базе.")
-        return
-    await query.message.reply_text(format_answer(*item))
 
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -236,15 +320,14 @@ def main() -> None:
     faq_index = {int(r.faq_id): (r.question, r.answer) for r in faq.itertuples()}
 
     app = Application.builder().token(token).post_init(set_commands).build()
-    app.bot_data.update(engine=engine, methods=methods, faq_index=faq_index,
-                        default_method=DEFAULT_METHOD if DEFAULT_METHOD in methods else next(iter(methods)))
+    app.bot_data.update(engine=engine, methods=methods, faq_index=faq_index)
     app.add_handler(CommandHandler(["start", "help"], start))
     app.add_handler(CommandHandler("method", choose_method))
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CommandHandler("app", open_app))
     app.add_handler(CallbackQueryHandler(method_selected, pattern=r"^method:"))
-    app.add_handler(CallbackQueryHandler(feedback, pattern=r"^fb:[01]:\d+$"))
-    app.add_handler(CallbackQueryHandler(alternative_selected, pattern=r"^alt:\d+$"))
+    app.add_handler(CallbackQueryHandler(show_candidate, pattern=r"^cmp:\d+:[0-9a-f-]{36}$"))
+    app.add_handler(CallbackQueryHandler(choice_feedback, pattern=r"^cfb:[01]:\d+:[0-9a-f-]{36}$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, answer))
     print("Бот запущен. Методы:", ", ".join(m.title for m in methods.values()), "| Остановить: Ctrl+C")
     app.run_polling()
