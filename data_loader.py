@@ -6,6 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from database import check_connection, get_engine
+from term_index import load_term_index
 
 DATA_URL = ("https://huggingface.co/datasets/Arailym-tleubayeva/AITUAdmissionsGuideDataset/"
             "resolve/main/QA_addmissionAitu.csv")
@@ -93,6 +94,8 @@ def main() -> None:
     print_summary(raw, faq)
     faq.to_parquet(CLEAN_PATH, index=False)
     load_to_db(faq, engine)
+    # обратный индекс строится по тому, что фактически лежит в базе
+    load_term_index(engine, pd.read_sql("SELECT faq_id, question FROM faq ORDER BY faq_id", engine))
 
 
 if __name__ == "__main__":
