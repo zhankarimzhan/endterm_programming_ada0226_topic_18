@@ -178,6 +178,31 @@ SELECT day, questions,
 FROM daily
 ORDER BY day;
 
+-- name: test_errors | Анализ ошибок на тестовых вопросах: сколько методов ответили неверно, и что они выдали [CTE, JOIN, GROUP BY, HAVING, STRING_AGG]
+WITH last_runs AS (
+    SELECT DISTINCT ON (method_id) run_id, method_id FROM runs ORDER BY method_id, created_at DESC
+),
+top1 AS (
+    SELECT tq.query_id, tq.text AS test_query, tq.true_faq_id, lr.method_id, p.faq_id,
+           (fp.answer = ft.answer) AS correct          -- верно, если ответ совпадает (дубликаты вопроса тоже верны)
+    FROM last_runs lr
+    JOIN predictions p   ON p.run_id = lr.run_id AND p.rank = 1
+    JOIN test_queries tq ON tq.query_id = p.query_id
+    JOIN faq fp ON fp.faq_id = p.faq_id
+    JOIN faq ft ON ft.faq_id = tq.true_faq_id
+)
+SELECT t.test_query,
+       MIN(ft.question)                                                     AS expected_question,
+       COUNT(*) FILTER (WHERE NOT t.correct)                                AS wrong_methods,
+       COUNT(*)                                                             AS methods,
+       STRING_AGG(DISTINCT fp.question, ' | ') FILTER (WHERE NOT t.correct) AS wrong_answers
+FROM top1 t
+JOIN faq ft ON ft.faq_id = t.true_faq_id
+JOIN faq fp ON fp.faq_id = t.faq_id
+GROUP BY t.query_id, t.test_query
+HAVING COUNT(*) FILTER (WHERE NOT t.correct) >= 1
+ORDER BY wrong_methods DESC, t.test_query;
+
 -- name: unanswered_gaps | Вопросы без ответа: сколько раз задавали, причина и ближайший вопрос FAQ [представление, JOIN, GROUP BY, оконные DENSE_RANK]
 SELECT DENSE_RANK() OVER (ORDER BY COUNT(*) DESC) AS priority,
        lower(u.query_text)                        AS question,

@@ -9,11 +9,12 @@ from database import run_query
 # Общие показатели: вопросы считаются по requests, оценки — по ответам методов
 TOTALS_SQL = """
     WITH per_request AS (
-        SELECT r.request_id, COALESCE(BOOL_OR(a.found), false) AS answered
+        SELECT r.request_id, r.mode, COALESCE(BOOL_OR(a.found), false) AS answered
         FROM requests r LEFT JOIN v_method_answers a ON a.request_id = r.request_id
-        GROUP BY r.request_id
+        GROUP BY r.request_id, r.mode
     )
     SELECT COUNT(*)                             AS questions,
+           COUNT(*) FILTER (WHERE mode = 'test') AS test_questions,
            COUNT(*) FILTER (WHERE answered)     AS answered,
            COUNT(*) FILTER (WHERE NOT answered) AS not_found,
            (SELECT COUNT(*) FROM v_method_answers WHERE helpful)         AS likes,
@@ -111,6 +112,19 @@ SUGGESTIONS_SQL = """
     ORDER BY times DESC, last_asked DESC
 """
 
+# Оценка на тестовых вопросах: последний прогон каждого метода (вариант предобработки — отдельный метод)
+EVALUATION_SQL = """
+    SELECT m.title AS method, m.preprocessing,
+           ROUND(r.p_at_1, 3) AS p_at_1, ROUND(r.p_at_3, 3) AS p_at_3, ROUND(r.mrr, 3) AS mrr,
+           ROUND(r.time_ms, 2) AS time_ms, ROUND(r.memory_mb, 2) AS memory_mb,
+           (SELECT COUNT(DISTINCT query_id) FROM predictions p WHERE p.run_id = r.run_id) AS test_queries,
+           RANK() OVER (ORDER BY r.mrr DESC) AS place,
+           r.created_at
+    FROM (SELECT DISTINCT ON (method_id) * FROM runs ORDER BY method_id, created_at DESC) r
+    JOIN methods m ON m.method_id = r.method_id
+    ORDER BY place, r.time_ms
+"""
+
 RESOLVE_SQL = """
     INSERT INTO resolutions (request_id)
     SELECT unnest(CAST(:ids AS uuid[]))
@@ -146,6 +160,10 @@ def get_suggestions(engine: Engine) -> pd.DataFrame:
     return run_query(SUGGESTIONS_SQL, engine)
 
 
+def get_evaluation(engine: Engine) -> pd.DataFrame:
+    return run_query(EVALUATION_SQL, engine)
+
+
 def get_top_unanswered(engine: Engine, limit: int = 5) -> pd.DataFrame:
     return get_suggestions(engine).head(limit)
 
@@ -163,7 +181,8 @@ def format_stats(engine: Engine) -> str:
         return "Пока нет ни одного вопроса."
     rated = t["likes"] + t["dislikes"]
     lines = ["📊 Статистика бота",
-             f"Вопросов: {t['questions']} (ответ найден: {t['answered']}, не найден: {t['not_found']})",
+             f"Вопросов: {t['questions']}, из них тестовых {t['test_questions']} "
+             f"(ответ найден: {t['answered']}, не найден: {t['not_found']})",
              f"Оценки ответов методов: 👍 {t['likes']}  👎 {t['dislikes']}"
              + (f"  — довольны {round(100 * t['likes'] / rated)}%" if rated else ""),
              "", "По методам (место — по доле 👍):"]
@@ -174,6 +193,11 @@ def format_stats(engine: Engine) -> str:
         mem = f"{r.memory_mb:.1f} МБ" if pd.notna(r.memory_mb) else "—"
         lines.append(f"{r.rank}. {r.name}: ответов {r.questions}, найдено {int(r.found_pct)}%, ср. сходство {avg}, "
                      f"👍 {r.likes} 👎 {r.dislikes}, довольны {sat}, поиск {lat}, память {mem}")
+    ev = get_evaluation(engine)
+    if not ev.empty:
+        lines += ["", f"Оценка на тестовых вопросах ({int(ev['test_queries'].max())} шт., место — по MRR):"]
+        lines += [f"{r.place}. {r.method}: P@1 {r.p_at_1:.2f}, P@3 {r.p_at_3:.2f}, MRR {r.mrr:.2f}, {r.time_ms:.1f} мс"
+                  for r in ev.itertuples()]
     top = get_top_unanswered(engine)
     if not top.empty:
         lines += ["", "Частые вопросы без ответа:"]

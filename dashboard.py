@@ -8,8 +8,8 @@ import plotly.express as px
 import streamlit as st
 
 from database import check_connection, get_engine
-from stats import (get_chat_log, get_comparison, get_daily, get_method_stats, get_suggestions, get_top_matched,
-                   get_totals, mark_resolved)
+from stats import (get_chat_log, get_comparison, get_daily, get_evaluation, get_method_stats, get_suggestions,
+                   get_top_matched, get_totals, mark_resolved)
 
 st.set_page_config(page_title="AITU FAQ Bot — статистика", page_icon="📊", layout="centered")
 
@@ -35,8 +35,28 @@ def methods():
 def load(name: str) -> pd.DataFrame | dict:
     loaders = {"totals": get_totals, "methods": get_method_stats, "log": get_chat_log,
                "daily": get_daily, "top": get_top_matched, "suggestions": get_suggestions,
-               "comparison": get_comparison}
+               "comparison": get_comparison, "evaluation": get_evaluation}
     return loaders[name](engine())
+
+
+def page_evaluation() -> None:
+    """Качество методов на размеченных тестовых вопросах (init_project.py / evaluation.py)."""
+    ev = load("evaluation")
+    if ev.empty:
+        st.info("Оценка на тестовых вопросах ещё не выполнена: python init_project.py")
+        return
+    st.subheader("Оценка на тестовых вопросах")
+    st.caption(f"{int(ev['test_queries'].max())} перефразированных вопросов из FAQ (data/test_queries.csv). "
+               "P@1 — правильный ответ первым, P@3 — в топ-3, MRR — средняя обратная позиция правильного ответа. "
+               "Методы со стеммингом и лемматизацией — отдельные строки")
+    st.dataframe(ev.drop(columns="created_at").rename(columns={
+        "method": "метод", "preprocessing": "предобработка", "p_at_1": "P@1", "p_at_3": "P@3", "mrr": "MRR",
+        "time_ms": "поиск, мс", "memory_mb": "память, МБ", "test_queries": "вопросов", "place": "место"}),
+        hide_index=True, width="stretch")
+    long = ev.melt(id_vars=["method"], value_vars=["p_at_1", "p_at_3", "mrr"], var_name="метрика", value_name="значение")
+    long["метрика"] = long["метрика"].map({"p_at_1": "P@1", "p_at_3": "P@3", "mrr": "MRR"})
+    st.plotly_chart(px.bar(long, x="значение", y="method", color="метрика", barmode="group", orientation="h",
+                           range_x=[0, 1], labels={"method": ""}, height=420), width="stretch")
 
 
 def page_stats() -> None:
@@ -45,8 +65,9 @@ def page_stats() -> None:
         st.info("Пока нет ни одного вопроса — напишите боту.")
         return
     rated = t["likes"] + t["dislikes"]
+    page_evaluation()
     c1, c2, c3 = st.columns(3)
-    c1.metric("Вопросов", t["questions"])
+    c1.metric("Вопросов", t["questions"], help=f"из них тестовых: {t['test_questions']}")
     c2.metric("Ответ найден", f"{round(100 * t['answered'] / t['questions'])}%")
     c3.metric("Довольны", f"{round(100 * t['likes'] / rated)}%" if rated else "—", help="доля 👍 среди оценённых ответов методов")
     c1, c2, c3 = st.columns(3)
@@ -88,11 +109,13 @@ def page_queries() -> None:
         st.info("Пока нет вопросов.")
         return
     with st.expander("Фильтры", expanded=True):
+        modes = st.multiselect("Режим", ["compare", "single", "test"], default=["compare", "single"],
+                               help="test — тестовые вопросы из init_project.py")
         methods_sel = st.multiselect("Метод", sorted(log["method"].dropna().unique()))
         status = st.radio("Результат", ["все", "найден", "не найден"], horizontal=True)
         fb = st.radio("Отзыв", ["все", "👍", "👎", "без отзыва"], horizontal=True)
         text = st.text_input("Поиск по тексту вопроса")
-    df = log
+    df = log[log["mode"].isin(modes)] if modes else log
     if methods_sel:
         df = df[df["method"].isin(methods_sel)]
     if status != "все":

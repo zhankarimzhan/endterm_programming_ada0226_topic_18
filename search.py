@@ -106,11 +106,11 @@ def _log_run(conn: Connection, request_id: str, method: SimilarityMethod, result
                                  for rank, r in enumerate(results, start=1)])
 
 
-def log_comparison(engine: Engine, query: str, rows: list[dict]) -> str:
-    """Сохраняет запрос и ответы всех методов (режим сравнения); возвращает request_id."""
+def log_comparison(engine: Engine, query: str, rows: list[dict], mode: str = "compare") -> str:
+    """Сохраняет запрос и ответы всех методов (режим сравнения или тестовый прогон); возвращает request_id."""
     request_id = str(uuid.uuid4())
     with engine.begin() as conn:
-        conn.execute(REQUEST_SQL, {"rid": request_id, "q": query, "mode": "compare"})
+        conn.execute(REQUEST_SQL, {"rid": request_id, "q": query, "mode": mode})
         for r in rows:
             if r["results"]:
                 _log_run(conn, request_id, r["method"], r["results"], r["latency_ms"])

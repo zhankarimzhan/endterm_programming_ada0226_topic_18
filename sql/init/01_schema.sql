@@ -50,7 +50,7 @@ CREATE TABLE methods (
 CREATE TABLE requests (
     request_id    UUID PRIMARY KEY,
     query_text    TEXT NOT NULL,
-    mode          TEXT NOT NULL CHECK (mode IN ('compare', 'single')),   -- все методы или один
+    mode          TEXT NOT NULL CHECK (mode IN ('compare', 'single', 'test')),   -- все методы / один / тестовый прогон
     asked_at      TIMESTAMP NOT NULL DEFAULT now()
 );
 
