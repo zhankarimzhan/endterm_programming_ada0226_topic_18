@@ -5,6 +5,7 @@
   stopwords.py      3. удаление стоп-слов (вопросительные слова сохраняются)
   stemming.py       4а. стемминг Snowball («поступления» → «поступлен»)
   lemmatization.py  4б. лемматизация pymorphy3 («поступления» → «поступление»)
+  explain.py        результат каждого шага для одного текста (разбор в API)
 """
 from preprocessing.lemmatization import lemmatize
 from preprocessing.normalize import normalize, tokenize

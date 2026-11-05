@@ -2,6 +2,7 @@
 
   runner.py   build_methods (обучение, время, память), timed_search, compare_all
   history.py  requests -> method_runs -> candidates; feedback (оценки)
+  ask.py      вопрос → ответы всех методов, итоговый ответ и разбор (для API)
 """
 from data_prep.storage import load_faq
 from search.history import log_comparison, log_single, save_feedback, unanswered_reason

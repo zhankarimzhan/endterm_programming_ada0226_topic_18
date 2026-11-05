@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AITU FAQ Bot · статистика</title>
+<style>
+/* Плотный рабочий дашборд: шапка с вкладками, под ней карточки-секции; графики — SVG без библиотек. */
+:root {
+  --bg: #f3f5f7;
+  --surface: #ffffff;
+  --ink: #141b22;
+  --ink-2: #4c5864;
+  --muted: #7a8794;
+  --line: #e1e6ea;
+  --grid: #edf0f2;
+  --accent: #1f5f99;
+  --accent-soft: #e5eef7;
+  --good: #1f7a46; --good-soft: #e2f3e9;
+  --bad: #b23a2e;  --bad-soft: #f9e5e2;
+  --warn: #8a5a00; --warn-soft: #f8eed6;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;
+  --f-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  --f-mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1418; --surface: #171d22; --ink: #e6ebef; --ink-2: #b2bec8; --muted: #84919c;
+    --line: #27313a; --grid: #212a31; --accent: #7fb3ea; --accent-soft: #1b2b3b;
+    --good: #6fd29a; --good-soft: #15301f; --bad: #f08a7e; --bad-soft: #3a1d1a; --warn: #e9be62; --warn-soft: #33290f;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1418; --surface: #171d22; --ink: #e6ebef; --ink-2: #b2bec8; --muted: #84919c;
+  --line: #27313a; --grid: #212a31; --accent: #7fb3ea; --accent-soft: #1b2b3b;
+  --good: #6fd29a; --good-soft: #15301f; --bad: #f08a7e; --bad-soft: #3a1d1a; --warn: #e9be62; --warn-soft: #33290f;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--ink); font: 14px/1.5 var(--f-ui);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header.top { position: sticky; top: 0; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); padding-top: env(safe-area-inset-top, 0px); }
+.bar { display: flex; align-items: center; gap: 12px; padding-block: 12px 0; flex-wrap: wrap; }
+.bar h1 { font-size: 1.05rem; margin: 0; font-weight: 650; letter-spacing: -.01em; }
+.bar h1 span { color: var(--muted); font-weight: 400; }
+.bar .spacer { flex: 1; }
+.updated { color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 7px; padding: 6px 12px; }
+.btn:hover { background: var(--accent-soft); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn:disabled { opacity: .5; cursor: default; }
+nav.tabs { display: flex; gap: 2px; overflow-x: auto; margin-top: 8px; scrollbar-width: none; }
+nav.tabs a { padding: 9px 14px; color: var(--ink-2); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+nav.tabs a:hover { color: var(--ink); }
+nav.tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+
+main { padding-block: 20px 48px; display: grid; gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 12px; min-width: 0; }
+.card h2 { font-size: 1rem; margin: 0; font-weight: 650; }
+.card .hint { color: var(--muted); font-size: .84rem; margin: 0; max-width: 80ch; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 760px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+
+.tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 900px) { .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 460px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 2px; }
+.tile .l { color: var(--ink-2); font-size: .8rem; }
+.tile .v { font-size: 1.6rem; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.tile .s { color: var(--muted); font-size: .78rem; }
+
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+.tbl table { border-collapse: collapse; width: 100%; font-size: .84rem; }
+.tbl th, .tbl td { padding: 7px 10px; text-align: left; border-top: 1px solid var(--line); vertical-align: top; }
+.tbl thead th { border-top: 0; background: var(--bg); color: var(--ink-2); font-weight: 600; font-size: .76rem; white-space: nowrap; position: sticky; top: 0; }
+.tbl td.n, .tbl th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tbl tbody tr:hover td { background: var(--accent-soft); }
+.tbl.scroll { max-height: 520px; overflow-y: auto; }
+.tbl tr.open td { background: var(--accent-soft); }
+.tbl tr.answer td { background: var(--bg); color: var(--ink-2); white-space: pre-wrap; }
+.clickable tbody tr:not(.answer) { cursor: pointer; }
+.key { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: .74rem; white-space: nowrap; }
+.pill.ok { background: var(--good-soft); color: var(--good); }
+.pill.no { background: var(--bad-soft); color: var(--bad); }
+.pill.mid { background: var(--warn-soft); color: var(--warn); }
+.mono { font-family: var(--f-mono); font-size: .8rem; }
+.empty { color: var(--muted); padding: 18px; text-align: center; border: 1px dashed var(--line); border-radius: 8px; }
+.err { color: var(--bad); background: var(--bad-soft); padding: 12px 14px; border-radius: 8px; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: end; }
+.filters label, .field { display: grid; gap: 4px; font-size: .78rem; color: var(--ink-2); }
+.filters input[type="text"], .filters select, .field input, .field select { border: 1px solid var(--line); border-radius: 7px; padding: 6px 9px; background: var(--surface); min-width: 0; }
+.checks { display: flex; gap: 10px; flex-wrap: wrap; font-size: .84rem; color: var(--ink); }
+.checks label { display: inline-flex; gap: 5px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); padding: 5px 10px; font-size: .82rem; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.count { color: var(--muted); font-size: .8rem; }
+.searchrow { display: flex; gap: 8px; flex-wrap: wrap; }
+.searchrow input { flex: 1 1 240px; border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; background: var(--surface); }
+pre.sql { margin: 0; background: var(--bg); border-radius: 8px; padding: 12px; overflow-x: auto; font: .8rem/1.55 var(--f-mono); }
+details summary { cursor: pointer; color: var(--ink-2); font-size: .84rem; }
+
+/* charts */
+.chart { position: relative; width: 100%; min-width: 0; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart text { fill: var(--ink-2); font: 11px var(--f-ui); }
+.chart .axis line, .chart .gridline { stroke: var(--grid); stroke-width: 1; }
+.chart .baseline { stroke: var(--line); stroke-width: 1; }
+.chart .hit { fill: transparent; }
+.chart [data-tip] { cursor: default; }
+.chart .dim { opacity: .35; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .8rem; color: var(--ink-2); }
+.tip { position: fixed; z-index: 20; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: .8rem; box-shadow: 0 6px 20px rgb(0 0 0 / .12); max-width: 280px; }
+.tip b { font-weight: 600; }
+.tip .row { display: flex; gap: 8px; align-items: center; justify-content: space-between; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: no-preference) { .chart rect, .chart path, .chart circle { transition: opacity .12s; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="bar">
+      <h1>AITU FAQ Bot <span>статистика</span></h1>
+      <div class="spacer"></div>
+      <span class="updated" id="updated"></span>
+      <button class="btn" id="refresh" type="button">Обновить</button>
+    </div>
+    <nav class="tabs" aria-label="Разделы">
+      <a href="#stats">Статистика</a>
+      <a href="#requests">Запросы</a>
+      <a href="#matches">Совпадения</a>
+      <a href="#suggestions">Предложения</a>
+      <a href="#sql">SQL</a>
+    </nav>
+  </div>
+</header>
+<main class="wrap" id="view"></main>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+"use strict";
+// ---------- API ----------
+const KEY = new URLSearchParams(location.search).get("key") || "";
+const cache = new Map();
+
+async function api(path, options = {}) {
+  const headers = { "X-Dashboard-Key": KEY, ...(options.body ? { "Content-Type": "application/json" } : {}) };
+  const res = await fetch(path, { ...options, headers });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail || detail; } catch (e) {}
+    throw new Error(res.status === 403 ? "Нет доступа: откройте дашборд из бота командой /app" : `Ошибка API (${res.status}): ${detail}`);
+  }
+  return res.json();
+}
+function load(path) {
+  if (!cache.has(path)) cache.set(path, api(path).catch(e => { cache.delete(path); throw e; }));
+  return cache.get(path);
+}
+
+// ---------- helpers ----------
+const $ = (sel, root = document) => root.querySelector(sel);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const num = (v, d = 0) => v == null || Number.isNaN(+v) ? "—" : (+v).toLocaleString("ru-RU", { minimumFractionDigits: d, maximumFractionDigits: d });
+const pct = v => v == null ? "—" : `${Math.round(v)}%`;
+const dt = s => s ? new Date(s).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+const day = s => new Date(s).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
+const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const SERIES = ["--s1", "--s2", "--s3"];
+const MODES = { compare: "сравнение", single: "один метод", test: "тестовые" };
+const PREP = { stem: "стемминг", lemma: "лемматизация", none: "нет", lower: "нижний регистр" };
+
+function card(title, hint, body = "") {
+  return `<section class="card">${title ? `<h2>${title}</h2>` : ""}${hint ? `<p class="hint">${hint}</p>` : ""}${body}</section>`;
+}
+function table(cols, rows, { cls = "", rowAttr = () => "" } = {}) {
+  if (!rows.length) return `<div class="empty">Нет данных</div>`;
+  const head = cols.map(c => `<th class="${c.n ? "n" : ""}">${c.label}</th>`).join("");
+  const body = rows.map((r, i) => `<tr ${rowAttr(r, i)}>${cols.map(c => `<td class="${c.n ? "n" : ""}">${c.html ? c.html(r) : esc(c.fmt ? c.fmt(r[c.key], r) : r[c.key])}</td>`).join("")}</tr>`).join("");
+  return `<div class="tbl ${cls}"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+function legend(items) {
+  return `<div class="legend">${items.map(it => `<span><span class="key" style="background:var(${it.color})"></span>${esc(it.label)}</span>`).join("")}</div>`;
+}
+function fbPill(f) { return f === "👍" ? `<span class="pill ok">👍</span>` : f === "👎" ? `<span class="pill no">👎</span>` : ""; }
+function downloadCsv(name, columns, rows) {
+  const q = v => v == null ? "" : /[",\n;]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
+  const text = "﻿" + [columns.map(q).join(","), ...rows.map(r => r.map(q).join(","))].join("\n");
+  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([text], { type: "text/csv" })), download: `${name}.csv` });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ---------- tooltip ----------
+const tip = $("#tip");
+document.addEventListener("pointermove", e => {
+  const t = e.target.closest?.("[data-tip]");
+  if (!t) { tip.hidden = true; return; }
+  tip.innerHTML = t.getAttribute("data-tip");
+  tip.hidden = false;
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = e.clientX + 14, y = e.clientY + 14;
+  if (x + w > innerWidth - 8) x = e.clientX - w - 14;
+  if (y + h > innerHeight - 8) y = e.clientY - h - 14;
+  tip.style.left = `${Math.max(8, x)}px`; tip.style.top = `${Math.max(8, y)}px`;
+});
+document.addEventListener("pointerleave", () => { tip.hidden = true; });
+const tipRows = (title, rows) => `<b>${esc(title)}</b>` + rows.map(r => `<div class="row"><span>${r.color ? `<span class="key" style="background:var(${r.color})"></span>` : ""}${esc(r.label)}</span><span>${esc(r.value)}</span></div>`).join("");
+
+// ---------- charts (SVG) ----------
+// Полоса со скруглённым концом данных (4px) и прямым краем у базовой линии.
+function barPath(x, y, w, h, dir) {
+  const r = Math.min(4, dir === "h" ? w : h, dir === "h" ? h / 2 : w / 2);
+  if (w <= 0 || h <= 0) return "";
+  if (dir === "h") return `M${x},${y}h${w - r}a${r},${r} 0 0 1 ${r},${r}v${h - 2 * r}a${r},${r} 0 0 1 ${-r},${r}h${-(w - r)}z`;
+  return `M${x},${y + h}v${-(h - r)}a${r},${r} 0 0 1 ${r},${-r}h${w - 2 * r}a${r},${r} 0 0 1 ${r},${r}v${h - r}z`;
+}
+const charts = [];
+function chart(el, draw) { charts.push({ el, draw }); draw(el, el.clientWidth || 600); }
+let resizeTimer;
+addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => charts.forEach(c => c.el.isConnected && c.draw(c.el, c.el.clientWidth)), 120); });
+
+// Горизонтальные сгруппированные полосы: категории по вертикали, серии внутри группы, шкала 0..max.
+function hbarGroup(el, { cats, series, max, fmt, ticks }) {
+  chart(el, (el, W) => {
+    const left = Math.min(220, Math.max(110, W * 0.32)), right = 40, top = 8, bottom = 22;
+    const bar = Math.min(12, 24 / series.length * 1.4), gap = 2, groupPad = 12;
+    const groupH = series.length * bar + (series.length - 1) * gap;
+    const H = top + bottom + cats.length * (groupH + groupPad);
+    const plotW = W - left - right, sx = v => (v / max) * plotW;
+    let s = `<svg viewBox="0 0 ${W} ${H}" role="img">`;
+    for (const t of ticks) s += `<line class="gridline" x1="${left + sx(t)}" x2="${left + sx(t)}" y1="${top}" y2="${H - bottom}"/><text x="${left + sx(t)}" y="${H - 6}" text-anchor="middle">${fmt(t)}</text>`;
+    cats.forEach((c, i) => {
+      const y0 = top + i * (groupH + groupPad) + groupPad / 2;
+      s += `<text x="${left - 8}" y="${y0 + groupH / 2 + 4}" text-anchor="end">${esc(trim(c.label, left / 6.2))}</text>`;
+      const tipHtml = tipRows(c.label, series.map(se => ({ label: se.label, value: fmt(c.values[se.key]), color: se.color })));
+      series.forEach((se, j) => {
+        const v = c.values[se.key] ?? 0, y = y0 + j * (bar + gap);
+        s += `<path d="${barPath(left, y, sx(v), bar, "h")}" fill="var(${se.color})"/>`;
+      });
+      s += `<rect class="hit" x="0" y="${y0 - groupPad / 2}" width="${W}" height="${groupH + groupPad}" data-tip="${esc(tipHtml)}"/>`;
+    });
+    s += `<line class="baseline" x1="${left}" x2="${left}" y1="${top}" y2="${H - bottom}"/></svg>`;
+    el.innerHTML = s;
+  });
+}
+
+// Вертикальные столбцы: сгруппированные (stacked=false) или с накоплением (stacked=true).
+function columns(el, { cats, series, max, fmt, ticks, stacked = false, height = 240 }) {
+  chart(el, (el, W) => {
+    const left = 38, right = 8, top = 10, bottom = 26, H = height;
+    const plotW = W - left - right, plotH = H - top - bottom, band = plotW / cats.length;
+    const colW = stacked ? Math.min(24, band * 0.6) : Math.min(24, band * 0.7 / series.length);
+    const sy = v => (v / max) * plotH;
+    let s = `<svg viewBox="0 0 ${W} ${H}" role="img">`;
+    for (const t of ticks) s += `<line class="gridline" x1="${left}" x2="${W - right}" y1="${top + plotH - sy(t)}" y2="${top + plotH - sy(t)}"/><text x="${left - 6}" y="${top + plotH - sy(t) + 4}" text-anchor="end">${fmt(t)}</text>`;
+    const every = Math.ceil(cats.length / Math.max(1, Math.floor(plotW / 54)));
+    cats.forEach((c, i) => {
+      const cx = left + band * i + band / 2;
+      if (i % every === 0) s += `<text x="${cx}" y="${H - 8}" text-anchor="middle">${esc(trim(c.label, band / 6))}</text>`;
+      const visible = series.filter(se => (c.values[se.key] ?? 0) > 0);
+      if (stacked) {
+        let acc = 0;
+        visible.forEach((se, k) => {
+          const v = c.values[se.key], h = sy(v), y = top + plotH - sy(acc) - h;
+          const isTop = k === visible.length - 1;
+          s += isTop ? `<path d="${barPath(cx - colW / 2, y, colW, h, "v")}" fill="var(${se.color})"/>`
+                     : `<rect x="${cx - colW / 2}" y="${y + 1}" width="${colW}" height="${Math.max(0, h - 2)}" fill="var(${se.color})"/>`;
+          acc += v;
+        });
+      } else {
+        const groupW = series.length * colW + (series.length - 1) * 2;
+        series.forEach((se, j) => {
+          const v = c.values[se.key] ?? 0, x = cx - groupW / 2 + j * (colW + 2);
+          s += `<path d="${barPath(x, top + plotH - sy(v), colW, sy(v), "v")}" fill="var(${se.color})"/>`;
+        });
+      }
+      const tipHtml = tipRows(c.label, series.map(se => ({ label: se.label, value: fmt(c.values[se.key] ?? 0), color: se.color })));
+      s += `<rect class="hit" x="${left + band * i}" y="${top}" width="${band}" height="${plotH}" data-tip="${esc(tipHtml)}"/>`;
+    });
+    s += `<line class="baseline" x1="${left}" x2="${W - right}" y1="${top + plotH}" y2="${top + plotH}"/></svg>`;
+    el.innerHTML = s;
+  });
+}
+
+// Точки на логарифмической шкале: значения различаются на порядки (мс, МБ), поэтому не полосы от нуля.
+function dotLog(el, { cats, unit }) {
+  chart(el, (el, W) => {
+    const vals = cats.map(c => c.value).filter(v => v > 0);
+    if (!vals.length) { el.innerHTML = `<div class="empty">Нет данных</div>`; return; }
+    const lo = Math.floor(Math.log10(Math.min(...vals))), hi = Math.ceil(Math.log10(Math.max(...vals)));
+    const left = Math.min(140, Math.max(90, W * 0.3)), right = 54, top = 6, bottom = 22, row = 26;
+    const H = top + bottom + cats.length * row, plotW = W - left - right;
+    const sx = v => left + ((Math.log10(v) - lo) / Math.max(1, hi - lo)) * plotW;
+    let s = `<svg viewBox="0 0 ${W} ${H}" role="img">`;
+    for (let p = lo; p <= hi; p++) { const v = 10 ** p; s += `<line class="gridline" x1="${sx(v)}" x2="${sx(v)}" y1="${top}" y2="${H - bottom}"/><text x="${sx(v)}" y="${H - 6}" text-anchor="middle">${num(v, p < 0 ? -p : 0)}</text>`; }
+    cats.forEach((c, i) => {
+      const y = top + i * row + row / 2;
+      s += `<text x="${left - 8}" y="${y + 4}" text-anchor="end">${esc(trim(c.label, left / 6.2))}</text>`;
+      if (c.value > 0) {
+        const x = sx(c.value);
+        s += `<line class="gridline" x1="${left}" x2="${x}" y1="${y}" y2="${y}"/><circle cx="${x}" cy="${y}" r="5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>`;
+        s += `<text x="${x + 10}" y="${y + 4}">${num(c.value, c.value < 1 ? 2 : 1)}</text>`;
+      }
+      s += `<rect class="hit" x="0" y="${y - row / 2}" width="${W}" height="${row}" data-tip="${esc(tipRows(c.label, [{ label: unit, value: num(c.value, 2) }]))}"/>`;
+    });
+    el.innerHTML = s + `</svg>`;
+  });
+}
+
+// Разброс сходства: по строке на метод, каждая точка — ответ на запрос; ромб — медиана.
+function strip(el, { cats }) {
+  chart(el, (el, W) => {
+    const left = Math.min(120, Math.max(90, W * 0.25)), right = 16, top = 6, bottom = 22, row = 34;
+    const H = top + bottom + cats.length * row, plotW = W - left - right, sx = v => left + v * plotW;
+    let s = `<svg viewBox="0 0 ${W} ${H}" role="img">`;
+    for (const t of [0, .25, .5, .75, 1]) s += `<line class="gridline" x1="${sx(t)}" x2="${sx(t)}" y1="${top}" y2="${H - bottom}"/><text x="${sx(t)}" y="${H - 6}" text-anchor="middle">${num(t, 2)}</text>`;
+    cats.forEach((c, i) => {
+      const y = top + i * row + row / 2;
+      s += `<text x="${left - 8}" y="${y + 4}" text-anchor="end">${esc(c.label)}</text>`;
+      c.points.forEach((p, k) => {
+        const jitter = ((k * 7919) % 11 - 5) * 1.4;
+        s += `<circle cx="${sx(p.score)}" cy="${y + jitter}" r="4" fill="var(--s1)" fill-opacity=".55" stroke="var(--surface)" stroke-width="1.5" data-tip="${esc(tipRows(c.label, [{ label: "сходство", value: num(p.score, 3) }]) + `<div>${esc(trim(p.query, 60))}</div>`)}"/>`;
+      });
+      if (c.points.length) {
+        const sorted = c.points.map(p => p.score).sort((a, b) => a - b), med = sorted[Math.floor(sorted.length / 2)];
+        s += `<path d="M${sx(med)},${y - 9}l6,9l-6,9l-6,-9z" fill="var(--ink)" stroke="var(--surface)" stroke-width="2" data-tip="${esc(tipRows(c.label, [{ label: "медиана", value: num(med, 3) }, { label: "ответов", value: c.points.length }]))}"/>`;
+      }
+    });
+    el.innerHTML = s + `</svg>`;
+  });
+}
+function trim(s, n) { s = String(s ?? ""); n = Math.max(4, Math.floor(n)); return s.length > n ? s.slice(0, n - 1) + "…" : s; }
+
+// ---------- pages ----------
+async function pageStats(view) {
+  const [t, ev, m, daily] = await Promise.all([load("/api/totals"), load("/api/evaluation"), load("/api/methods"), load("/api/daily")]);
+  if (!t.questions) { view.innerHTML = card("", "", `<div class="empty">Пока нет ни одного вопроса: напишите боту.</div>`); return; }
+  const rated = t.likes + t.dislikes;
+  view.innerHTML = `
+    <div class="tiles">
+      <div class="tile"><span class="l">Вопросов</span><span class="v">${num(t.questions)}</span><span class="s">из них тестовых ${num(t.test_questions)}</span></div>
+      <div class="tile"><span class="l">Ответ найден</span><span class="v">${pct(100 * t.answered / t.questions)}</span><span class="s">${num(t.answered)} вопросов</span></div>
+      <div class="tile"><span class="l">Довольны</span><span class="v">${rated ? pct(100 * t.likes / rated) : "—"}</span><span class="s">доля 👍 среди оценённых</span></div>
+      <div class="tile"><span class="l">Не найдено</span><span class="v">${num(t.not_found)}</span><span class="s">ни один метод</span></div>
+      <div class="tile"><span class="l">👍</span><span class="v">${num(t.likes)}</span><span class="s">ответов методов</span></div>
+      <div class="tile"><span class="l">👎</span><span class="v">${num(t.dislikes)}</span><span class="s">ответов методов</span></div>
+    </div>
+    <div id="ev"></div>
+    ${card("Сравнение методов", "Качество — доля 👍 среди оценённых ответов метода. Время — среднее время поиска одного ответа. Память — индекс метода (для embeddings вместе с моделью, для pg_trgm — таблица в PostgreSQL).",
+      `${legend([{ label: "ответ найден, %", color: "--s1" }, { label: "довольны, %", color: "--s2" }])}<div class="chart" id="c-methods"></div>` +
+      table([
+        { label: "Место", key: "rank", n: 1 }, { label: "Метод", key: "name" }, { label: "Ответов", key: "questions", n: 1 },
+        { label: "Найдено, %", key: "found_pct", n: 1, fmt: v => num(v) }, { label: "Ср. сходство", key: "avg_score", n: 1, fmt: v => num(v, 2) },
+        { label: "👍", key: "likes", n: 1 }, { label: "👎", key: "dislikes", n: 1 }, { label: "Довольны, %", key: "satisfaction_pct", n: 1, fmt: v => num(v) },
+        { label: "Поиск, мс", key: "avg_latency_ms", n: 1, fmt: v => num(v, 1) }, { label: "Память, МБ", key: "memory_mb", n: 1, fmt: v => num(v, 2) },
+        { label: "Подготовка, с", key: "fit_seconds", n: 1, fmt: v => num(v, 2) }], m))}
+    <div class="grid2">
+      ${card("Время поиска, мс", "Среднее на один ответ, логарифмическая шкала", `<div class="chart" id="c-lat"></div>`)}
+      ${card("Память, МБ", "Логарифмическая шкала: embeddings тяжелее остальных в тысячи раз", `<div class="chart" id="c-mem"></div>`)}
+    </div>
+    <div id="daily"></div>`;
+
+  if (ev.length) {
+    $("#ev").outerHTML = card("Оценка на тестовых вопросах",
+      `${ev[0].test_queries} перефразированных вопросов из FAQ (data/test_queries.csv). P@1 — правильный ответ первым, P@3 — в топ-3, MRR — средняя обратная позиция правильного ответа. Варианты со стеммингом и лемматизацией — отдельные строки.`,
+      `${legend([{ label: "P@1", color: "--s1" }, { label: "P@3", color: "--s2" }, { label: "MRR", color: "--s3" }])}<div class="chart" id="c-ev"></div>` +
+      table([
+        { label: "Место", key: "place", n: 1 }, { label: "Метод", key: "method" }, { label: "Обработка", key: "preprocessing", fmt: v => PREP[v] || v },
+        { label: "P@1", key: "p_at_1", n: 1, fmt: v => num(v, 3) }, { label: "P@3", key: "p_at_3", n: 1, fmt: v => num(v, 3) }, { label: "MRR", key: "mrr", n: 1, fmt: v => num(v, 3) },
+        { label: "Поиск, мс", key: "time_ms", n: 1, fmt: v => num(v, 2) }, { label: "Память, МБ", key: "memory_mb", n: 1, fmt: v => num(v, 2) }], ev));
+    hbarGroup($("#c-ev"), {
+      cats: ev.map(r => ({ label: r.method, values: r })), max: 1, ticks: [0, .25, .5, .75, 1], fmt: v => num(v, 2),
+      series: [{ key: "p_at_1", label: "P@1", color: "--s1" }, { key: "p_at_3", label: "P@3", color: "--s2" }, { key: "mrr", label: "MRR", color: "--s3" }] });
+  } else {
+    $("#ev").outerHTML = card("Оценка на тестовых вопросах", "", `<div class="empty">Оценка ещё не выполнена: python init_project.py</div>`);
+  }
+  columns($("#c-methods"), {
+    cats: m.map(r => ({ label: r.name, values: r })), max: 100, ticks: [0, 25, 50, 75, 100], fmt: v => `${num(v)}%`,
+    series: [{ key: "found_pct", label: "ответ найден", color: "--s1" }, { key: "satisfaction_pct", label: "довольны", color: "--s2" }] });
+  dotLog($("#c-lat"), { cats: m.map(r => ({ label: r.name, value: r.avg_latency_ms })), unit: "мс" });
+  dotLog($("#c-mem"), { cats: m.map(r => ({ label: r.name, value: r.memory_mb })), unit: "МБ" });
+
+  if (daily.length) {
+    const days = [...new Set(daily.map(d => d.day))].sort();
+    const modes = Object.keys(MODES).filter(k => daily.some(d => d.mode === k));
+    const cats = days.map(d => ({ label: day(d), values: Object.fromEntries(daily.filter(x => x.day === d).map(x => [x.mode, x.questions])) }));
+    const max = Math.max(...cats.map(c => Object.values(c.values).reduce((a, b) => a + b, 0)));
+    const step = niceStep(max);
+    $("#daily").outerHTML = card("Вопросы по дням", "", `${legend(modes.map((k, i) => ({ label: MODES[k], color: SERIES[i] })))}<div class="chart" id="c-daily"></div>`);
+    columns($("#c-daily"), { cats, stacked: true, max: Math.ceil(max / step) * step, ticks: range(0, Math.ceil(max / step) * step, step), fmt: v => num(v),
+      series: modes.map((k, i) => ({ key: k, label: MODES[k], color: SERIES[i] })) });
+  } else $("#daily").remove();
+}
+function niceStep(max) { const raw = Math.max(1, max) / 4, p = 10 ** Math.floor(Math.log10(raw)); return [1, 2, 5, 10].map(m => m * p).find(s => s >= raw); }
+function range(a, b, step) { const out = []; for (let v = a; v <= b + 1e-9; v += step) out.push(v); return out; }
+
+const reqState = { modes: new Set(["compare", "single"]), method: "", status: "all", fb: "all", text: "" };
+async function pageRequests(view) {
+  const log = await load("/api/requests?limit=5000");
+  if (!log.length) { view.innerHTML = card("", "", `<div class="empty">Пока нет вопросов.</div>`); return; }
+  const methods = [...new Set(log.map(r => r.method).filter(Boolean))].sort();
+  view.innerHTML = card("Ответы методов на вопросы", "Каждая строка — ответ одного метода на один вопрос. Нажмите на строку, чтобы увидеть текст ответа.", `
+    <div class="filters">
+      <div class="field">Режим<div class="checks">${Object.entries(MODES).map(([k, l]) => `<label><input type="checkbox" value="${k}" ${reqState.modes.has(k) ? "checked" : ""} data-f="mode">${l}</label>`).join("")}</div></div>
+      <label>Метод<select id="f-method"><option value="">все</option>${methods.map(x => `<option ${x === reqState.method ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></label>
+      <div class="field">Результат<div class="seg" data-seg="status">${[["all", "все"], ["found", "найден"], ["missing", "не найден"]].map(([k, l]) => `<button type="button" data-v="${k}" aria-pressed="${reqState.status === k}">${l}</button>`).join("")}</div></div>
+      <div class="field">Отзыв<div class="seg" data-seg="fb">${[["all", "все"], ["👍", "👍"], ["👎", "👎"], ["", "без отзыва"]].map(([k, l]) => `<button type="button" data-v="${k}" aria-pressed="${reqState.fb === k}">${l}</button>`).join("")}</div></div>
+      <label style="flex:1 1 200px">Поиск по тексту вопроса<input type="text" id="f-text" value="${esc(reqState.text)}" placeholder="например: общежитие"></label>
+    </div>
+    <div class="count" id="r-count"></div>
+    <div id="r-table"></div>`);
+  const render = () => {
+    const q = reqState.text.toLowerCase();
+    const rows = log.filter(r => (!reqState.modes.size || reqState.modes.has(r.mode)) && (!reqState.method || r.method === reqState.method)
+      && (reqState.status === "all" || r.found === (reqState.status === "found")) && (reqState.fb === "all" || r.feedback === reqState.fb)
+      && (!q || r.user_query.toLowerCase().includes(q)));
+    $("#r-count").textContent = `Записей: ${rows.length}${rows.length > 500 ? " (показаны первые 500)" : ""}`;
+    $("#r-table").innerHTML = table([
+      { label: "Время", key: "asked_at", fmt: dt }, { label: "Вопрос", key: "user_query" }, { label: "Режим", key: "mode", fmt: v => MODES[v] || v },
+      { label: "Метод", key: "method" }, { label: "Найденный вопрос FAQ", html: r => r.found ? esc(r.matched_question) : `<span class="pill mid">не найден</span> <span style="color:var(--muted)">${esc(r.matched_question || "")}</span>` },
+      { label: "Сходство", key: "score", n: 1, fmt: v => num(v, 3) }, { label: "Отзыв", html: r => fbPill(r.feedback) }],
+      rows.slice(0, 500), { cls: "scroll clickable", rowAttr: (r, i) => `data-i="${i}"` });
+    $("#r-table tbody")?.addEventListener("click", e => {
+      const tr = e.target.closest("tr[data-i]"); if (!tr) return;
+      if (tr.nextElementSibling?.classList.contains("answer")) { tr.nextElementSibling.remove(); tr.classList.remove("open"); return; }
+      const r = rows[+tr.dataset.i];
+      tr.classList.add("open");
+      tr.insertAdjacentHTML("afterend", `<tr class="answer"><td colspan="7">${esc(r.matched_answer || "Ответа нет")}</td></tr>`);
+    });
+  };
+  view.querySelectorAll('[data-f="mode"]').forEach(cb => cb.addEventListener("change", () => { cb.checked ? reqState.modes.add(cb.value) : reqState.modes.delete(cb.value); render(); }));
+  $("#f-method").addEventListener("change", e => { reqState.method = e.target.value; render(); });
+  $("#f-text").addEventListener("input", e => { reqState.text = e.target.value; render(); });
+  view.querySelectorAll("[data-seg]").forEach(seg => seg.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    reqState[seg.dataset.seg] = b.dataset.v;
+    seg.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+    render();
+  }));
+  render();
+}
+
+async function pageMatches(view) {
+  const [comp, log, top] = await Promise.all([load("/api/comparison"), load("/api/requests?limit=5000"), load("/api/top-matched?limit=10")]);
+  view.innerHTML = `
+    ${card("Задать вопрос", "Вопрос проходит через все методы так же, как в боте (POST /api/ask). Первый вопрос после запуска API дольше: загружается модель embeddings, около 10 секунд.", `
+      <form class="searchrow" id="s-form" style="align-items:center"><input id="s-q" type="text" placeholder="например: сколько стоит обучение" required maxlength="500" autocomplete="off">
+        <label class="checks"><input type="checkbox" id="s-save">записать в статистику</label>
+        <button class="btn primary" type="submit">Найти</button></form>
+      <div id="s-out" style="display:grid;gap:12px"></div>`)}
+    <div id="comp"></div>
+    <div id="dist"></div>
+    ${card("Чаще всего выдаваемые ответы", "", table([
+      { label: "Вопрос FAQ", key: "question" }, { label: "Раз", key: "times", n: 1 }, { label: "Ср. сходство", key: "avg_score", n: 1, fmt: v => num(v, 2) },
+      { label: "👍", key: "likes", n: 1 }, { label: "👎", key: "dislikes", n: 1 }], top))}`;
+
+  $("#s-form").addEventListener("submit", async e => {
+    e.preventDefault();
+    const q = $("#s-q").value.trim(), out = $("#s-out"), btn = e.submitter || $("#s-form button");
+    if (!q) return;
+    btn.disabled = true; out.innerHTML = `<div class="count">Ищу…</div>`;
+    try {
+      const save = $("#s-save").checked;
+      const res = await api("/api/ask", { method: "POST", body: JSON.stringify({ text: q, k: 3, save }) });
+      out.innerHTML = renderAsk(res);
+      if (save) cache.clear();
+      out.querySelectorAll("[data-fb]").forEach(b => b.addEventListener("click", async () => {
+        try {
+          await api("/api/feedback", { method: "POST", body: JSON.stringify({ request_id: res.request_id, faq_id: res.answer.faq_id, helpful: b.dataset.fb === "1" }) });
+          b.parentElement.innerHTML = `<span class="count">Отзыв сохранён</span>`; cache.clear();
+        } catch (err) { b.parentElement.innerHTML = `<span class="err">${esc(err.message)}</span>`; }
+      }));
+    } catch (err) { out.innerHTML = `<div class="err">${esc(err.message)}</div>`; }
+    btn.disabled = false;
+  });
+
+  if (comp.length) {
+    const methods = [...new Set(comp.map(r => r.method))].sort();
+    const byReq = new Map();
+    for (const r of comp) { if (!byReq.has(r.request_id)) byReq.set(r.request_id, { asked_at: r.asked_at, query: r.user_query, m: {} }); byReq.get(r.request_id).m[r.method] = r; }
+    const reqs = [...byReq.values()].sort((a, b) => b.asked_at.localeCompare(a.asked_at));
+    const agreeable = reqs.map(r => new Set(Object.values(r.m).map(x => x.matched_question).filter(Boolean))).filter(s => s.size);
+    const agreed = agreeable.filter(s => s.size === 1).length;
+    $("#comp").outerHTML = card("Ответы всех методов на каждый запрос",
+      `Режим сравнения в боте. Пусто — метод не нашёл ответ выше порога. ${agreeable.length ? `Все нашедшие методы сошлись в ответе в ${pct(100 * agreed / agreeable.length)} запросов (из ${agreeable.length} с найденным ответом).` : ""}`,
+      table([{ label: "Время", key: "asked_at", fmt: dt }, { label: "Вопрос", key: "query" },
+        ...methods.map(name => ({ label: esc(name), html: r => { const x = r.m[name]; if (!x) return ""; return x.matched_question ? `${esc(x.matched_question)}<div class="count">${num(x.score, 3)} · ${num(x.latency_ms, 1)} мс ${fbPill(x.feedback)}</div>` : `<span class="pill mid">не найдено</span><div class="count">${num(x.score, 3)}</div>`; } }))],
+        reqs, { cls: "scroll" }));
+  } else $("#comp").remove();
+
+  const scored = log.filter(r => r.score != null);
+  if (scored.length) {
+    const methods = [...new Set(scored.map(r => r.method))].sort();
+    $("#dist").outerHTML = card("Распределение сходства по методам", "Сходство лучшего найденного вопроса на каждый запрос, все режимы. Ромб — медиана. Шкалы методов разные: у embeddings оценки в целом выше, поэтому и порог у него 0.5.", `<div class="chart" id="c-dist"></div>`);
+    strip($("#c-dist"), { cats: methods.map(m => ({ label: m, points: scored.filter(r => r.method === m).map(r => ({ score: r.score, query: r.user_query })) })) });
+  } else $("#dist").remove();
+}
+
+// Ответ /api/ask: итоговый ответ, разбор текста по шагам, ответы каждого метода.
+function renderAsk(res) {
+  const a = res.analysis, t = a.text, chips = (xs, cls = "") => xs.length ? xs.map(x => `<span class="pill ${cls}" style="background:var(--bg);color:var(--ink)">${esc(x)}</span>`).join(" ") : `<span class="count">—</span>`;
+  const answer = res.answer
+    ? `<div style="display:grid;gap:6px;border-left:3px solid var(--accent);padding-left:12px">
+         <div class="count">Итоговый ответ · за него ${res.answer.votes} из ${a.methods_found} нашедших методов (${res.answer.methods.map(esc).join(", ")})</div>
+         <b>${esc(res.answer.question)}</b><div style="white-space:pre-wrap;color:var(--ink-2)">${esc(res.answer.answer)}</div>
+         ${res.request_id ? `<div class="searchrow"><button class="btn" type="button" data-fb="1">👍 подошёл</button><button class="btn" type="button" data-fb="0">👎 не подошёл</button></div>` : ""}
+       </div>`
+    : `<div class="empty">Ни один метод не нашёл ответ выше своего порога</div>`;
+  const steps = [["Нормализация", esc(t.normalized)], ["Слова", chips(t.tokens)], ["Убраны стоп-слова", chips(t.stopwords)],
+    ["Стеммы (BoW, TF-IDF)", chips(t.stems)], ["Леммы", chips(t.lemmas)], ["Правила rule-based", t.rules.changed ? esc(t.rules.text) : `<span class="count">замен нет</span>`]];
+  return `${answer}
+    <div class="tiles" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">
+      <div class="tile"><span class="l">Нашли ответ</span><span class="v">${a.methods_found} / ${a.methods_total}</span><span class="s">методов выше порога</span></div>
+      <div class="tile"><span class="l">Разных ответов</span><span class="v">${a.distinct_answers}</span><span class="s">среди нашедших</span></div>
+      <div class="tile"><span class="l">Согласие</span><span class="v">${a.agreement == null ? "—" : pct(100 * a.agreement)}</span><span class="s">за итоговый ответ</span></div>
+      <div class="tile"><span class="l">Быстрее всех</span><span class="v" style="font-size:1.1rem">${esc(a.fastest || "—")}</span><span class="s">${res.request_id ? "записано в статистику" : "не записано"}</span></div>
+    </div>
+    <details open><summary>Разбор текста</summary>${table([{ label: "Шаг", key: "0" }, { label: "Результат", html: r => r[1] }], steps)}</details>
+    ${table([
+      { label: "Метод", key: "title" }, { label: "Место", key: "rank", n: 1 }, { label: "Вопрос FAQ", key: "question" },
+      { label: "Сходство", key: "score", n: 1, fmt: v => num(v, 3) }, { label: "Порог", html: r => r.passes ? `<span class="pill ok">проходит</span>` : `<span class="pill mid">ниже ${num(r.min_score, 2)}</span>` },
+      { label: "Поиск, мс", key: "latency_ms", n: 1, fmt: v => v == null ? "" : num(v, 1) }],
+      res.methods.flatMap(m => m.results.map(r => ({ ...r, title: r.rank > 1 ? "" : m.title, min_score: m.min_score, latency_ms: r.rank > 1 ? null : m.latency_ms }))))}`;
+}
+
+async function pageSuggestions(view) {
+  const sug = await load("/api/suggestions");
+  if (!sug.length) { view.innerHTML = card("Предложения для FAQ", "", `<div class="empty">Необработанных вопросов нет.</div>`); return; }
+  const REASON = { not_found: "не найден", bad_answer: "ответ не подошёл" };
+  view.innerHTML = card("Предложения для FAQ", "Вопросы, на которые бот не нашёл ответа или все ответы получили 👎. Отметьте вопросы, ответ на которые уже добавлен в FAQ.", `
+    ${table([
+      { label: "", html: (r, i) => `<input type="checkbox" aria-label="Выбрать" data-sug>` },
+      { label: "Вопрос", key: "question" }, { label: "Раз", key: "times", n: 1 },
+      { label: "Причина", html: r => String(r.reasons || "").split(", ").map(x => `<span class="pill ${x === "not_found" ? "mid" : "no"}">${esc(REASON[x] || x)}</span>`).join(" ") },
+      { label: "Что предложил бот", key: "best_candidate" }, { label: "Сходство", key: "best_score", n: 1, fmt: v => num(v, 2) },
+      { label: "Последний раз", key: "last_asked", fmt: dt }], sug, { cls: "scroll", rowAttr: (r, i) => `data-i="${i}"` })}
+    <div class="searchrow" style="align-items:center">
+      <button class="btn primary" id="resolve" type="button" disabled>Отметить как обработанные</button>
+      <span class="count" id="resolve-msg"></span>
+    </div>`);
+  const btn = $("#resolve"), msg = $("#resolve-msg");
+  const selected = () => [...view.querySelectorAll("[data-sug]:checked")].map(cb => sug[+cb.closest("tr").dataset.i]);
+  let armed = false;
+  view.addEventListener("change", e => {
+    if (!e.target.matches("[data-sug]")) return;
+    const n = selected().length; armed = false;
+    btn.disabled = !n; btn.textContent = "Отметить как обработанные"; msg.textContent = n ? `Выбрано: ${n}` : "";
+  });
+  btn.addEventListener("click", async () => {
+    const rows = selected(); if (!rows.length) return;
+    if (!armed) { armed = true; btn.textContent = `Подтвердить: ${rows.length}`; msg.textContent = "Вопросы пропадут из списка"; return; }
+    btn.disabled = true;
+    try {
+      await api("/api/suggestions/resolve", { method: "POST", body: JSON.stringify({ ids: rows.flatMap(r => r.ids) }) });
+      cache.delete("/api/suggestions");
+      await pageSuggestions(view);
+      $("#resolve-msg").textContent = `Отмечено: ${rows.length}`;
+    } catch (err) { msg.textContent = err.message; btn.disabled = false; }
+  });
+}
+
+let sqlCurrent = "";
+async function pageSql(view) {
+  const list = await load("/api/queries");
+  if (!sqlCurrent) sqlCurrent = list[0]?.name || "";
+  view.innerHTML = card("SQL-аналитика", "Запросы из queries.sql к нормализованной схеме PostgreSQL.", `
+    <div class="searchrow">
+      <select id="q-name" style="flex:1 1 260px;border:1px solid var(--line);border-radius:7px;padding:7px 9px;background:var(--surface)">
+        ${list.map(q => `<option value="${esc(q.name)}" ${q.name === sqlCurrent ? "selected" : ""}>${esc(q.name)} — ${esc(q.title)}</option>`).join("")}
+      </select>
+      <button class="btn" id="q-csv" type="button">Скачать CSV</button>
+    </div>
+    <div id="q-out"><div class="count">Загрузка…</div></div>`);
+  let data = null;
+  const run = async () => {
+    const out = $("#q-out");
+    out.innerHTML = `<div class="count">Загрузка…</div>`;
+    try {
+      data = await load(`/api/queries/${encodeURIComponent(sqlCurrent)}`);
+      out.innerHTML = `<div class="count">Строк: ${data.rows.length}</div>` +
+        table(data.columns.map((c, i) => ({ label: esc(c), n: data.rows.some(r => typeof r[i] === "number"), html: r => esc(typeof r[i] === "number" ? num(r[i], Number.isInteger(r[i]) ? 0 : 3) : Array.isArray(r[i]) ? r[i].join(", ") : r[i]) })), data.rows, { cls: "scroll" }) +
+        `<details><summary>SQL</summary><pre class="sql">${esc(data.sql)}</pre></details>`;
+    } catch (err) { out.innerHTML = `<div class="err">${esc(err.message)}</div>`; }
+  };
+  $("#q-name").addEventListener("change", e => { sqlCurrent = e.target.value; run(); });
+  $("#q-csv").addEventListener("click", () => data && downloadCsv(sqlCurrent, data.columns, data.rows));
+  run();
+}
+
+// ---------- router ----------
+const PAGES = { stats: pageStats, requests: pageRequests, matches: pageMatches, suggestions: pageSuggestions, sql: pageSql };
+async function route() {
+  const name = PAGES[location.hash.slice(1)] ? location.hash.slice(1) : "stats";
+  document.querySelectorAll("nav.tabs a").forEach(a => a.hash === `#${name}` ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
+  const view = $("#view");
+  charts.length = 0;
+  view.innerHTML = `<div class="count">Загрузка…</div>`;
+  try { await PAGES[name](view); }
+  catch (err) { view.innerHTML = `<div class="err">${esc(err.message)}</div>`; }
+  $("#updated").textContent = `обновлено ${new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`;
+}
+addEventListener("hashchange", route);
+$("#refresh").addEventListener("click", () => { cache.clear(); route(); });
+route();
+</script>
+</body>
+</html>

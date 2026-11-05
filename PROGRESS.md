@@ -79,6 +79,8 @@ SQL-скрипты: `sql/init/01_schema.sql` (таблицы), `02_search.sql` (
 | `queries.sql` + `analytics/queries_runner.py` | 12 аналитических SQL-запросов; выполнение и загрузка в pandas, CSV в `results/sql/` |
 | `bot.py` | Telegram-бот: `/start`, `/method`, `/stats`, `/app`, кнопки 👍/👎, альтернативные ответы |
 | `dashboard.py` | дашборд Streamlit (мини-приложение Telegram): статистика, запросы, совпадения, предложения |
+| `api/app.py` | HTTP API (FastAPI): статистика в JSON, `POST /api/ask` — вопрос → ответы всех методов, итоговый ответ и разбор, `POST /api/feedback`; документация на `/api/docs` |
+| `web/dashboard.html` | HTML-версия дашборда, читает API; открывается на `/` того же сервера |
 
 ### 4. Очистка данных (`data_prep/cleaning.py`)
 - нормализация пробелов, удаление пустых строк;
@@ -240,7 +242,8 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 # каждое в своём терминале:
 .venv/bin/streamlit run dashboard.py                                   # дашборд, http://localhost:8501
-~/.local/bin/cloudflared tunnel --no-autoupdate --url http://localhost:8501   # HTTPS-адрес → WEBAPP_URL в .env
+.venv/bin/uvicorn api.app:app --port 8000                             # API + HTML-дашборд, http://localhost:8000/?key=DASHBOARD_KEY
+~/.local/bin/cloudflared tunnel --no-autoupdate --url http://localhost:8501   # HTTPS-адрес → WEBAPP_URL в .env (или :8000 для HTML-дашборда)
 .venv/bin/python bot.py                                                # Telegram-бот (запускать после WEBAPP_URL)
 ```
 
