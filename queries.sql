@@ -136,7 +136,7 @@ ORDER BY q.test_set, q.text;
 -- name: quality_by_type | Качество методов по типам формулировок (сленг, синоним, опечатка…): P@1, MRR, уверенные ошибки [представление, GROUP BY, оконные RANK]
 SELECT query_type, method,
        COUNT(*)                                                                  AS queries,
-       ROUND(AVG((first_rank = 1)::int), 2)                                      AS p_at_1,
+       ROUND(AVG(COALESCE(first_rank = 1, false)::int), 2)                                      AS p_at_1,
        ROUND(AVG(COALESCE(1.0 / first_rank, 0)), 3)                              AS mrr,
        ROUND(AVG(confident_wrong::int), 2)                                       AS confident_wrong,
        RANK() OVER (PARTITION BY query_type ORDER BY AVG(COALESCE(1.0 / first_rank, 0)) DESC) AS place

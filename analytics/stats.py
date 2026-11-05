@@ -131,7 +131,7 @@ EVALUATION_SQL = """
 BREAKDOWN_SQL = """
     SELECT {column} AS bucket, method, preprocessing,
            COUNT(*)                                                       AS queries,
-           ROUND(AVG((first_rank = 1)::int), 3)                           AS p_at_1,
+           ROUND(AVG(COALESCE(first_rank = 1, false)::int), 3)                           AS p_at_1,
            ROUND(AVG((first_rank IS NOT NULL)::int), 3)                   AS p_at_3,
            ROUND(AVG(COALESCE(1.0 / first_rank, 0)), 3)                   AS mrr,
            ROUND(AVG(confident_wrong::int), 3)                            AS confident_wrong
