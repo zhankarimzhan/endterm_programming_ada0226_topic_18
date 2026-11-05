@@ -1,4 +1,9 @@
-"""Общий интерфейс методов поиска похожего вопроса."""
+"""Общий интерфейс методов поиска похожего вопроса.
+
+Любой метод работает в два этапа:
+  fit(faq)       один раз при запуске: строит индекс по вопросам FAQ (_fit в каждом методе);
+  search(query)  на каждый запрос: scores() — сходство запроса с каждым вопросом, затем топ-k по убыванию.
+"""
 import pickle
 from abc import ABC, abstractmethod
 
@@ -41,7 +46,7 @@ class SimilarityMethod(ABC):
 
     def search(self, query: str, k: int = 3) -> list[dict]:
         """k самых похожих вопросов с ответами и оценкой сходства."""
-        s = self.scores(query)
+        s = self.scores(query)                       # сходство с каждым вопросом FAQ
         top = np.argsort(-s, kind="stable")[:k]
         return [{"faq_id": int(self.faq.at[i, "faq_id"]), "question": self.faq.at[i, "question"],
                  "answer": self.faq.at[i, "answer"], "score": float(s[i])} for i in top]

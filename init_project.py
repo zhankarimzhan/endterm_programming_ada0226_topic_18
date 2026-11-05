@@ -7,14 +7,14 @@
 import argparse
 import logging
 
-import pandas as pd
 from sqlalchemy import text
 
-import data_loader
-from database import check_connection, get_engine
-from evaluation import format_results, run_evaluation
+from analytics.evaluation import format_results, run_evaluation
+from data_prep import pipeline as data_pipeline
+from data_prep.storage import load_faq
+from data_prep.term_index import load_term_index
+from db import check_connection, get_engine
 from search import build_methods
-from term_index import load_term_index
 
 
 def table_is_empty(engine, table: str) -> bool:
@@ -34,9 +34,9 @@ def main() -> None:
 
     print("1/3 Данные FAQ")
     if table_is_empty(engine, "faq"):
-        data_loader.main()
+        data_pipeline.main()
     elif table_is_empty(engine, "terms"):
-        load_term_index(engine, pd.read_sql("SELECT faq_id, question FROM faq ORDER BY faq_id", engine))
+        load_term_index(engine, load_faq(engine))
     else:
         print("FAQ и обратный индекс уже загружены")
 

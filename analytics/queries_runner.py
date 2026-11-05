@@ -1,15 +1,16 @@
 """Выполнение аналитических SQL-запросов из queries.sql и загрузка результатов в pandas.
-Запуск: python queries_runner.py — печатает результаты и сохраняет их в results/sql/<ключ>.csv."""
+Запуск: python -m analytics.queries_runner — печатает результаты и сохраняет их в results/sql/<ключ>.csv."""
 import re
 from pathlib import Path
 
 import pandas as pd
 from sqlalchemy.engine import Engine
 
-from database import run_query
+from db import run_query
 
-QUERIES_PATH = Path(__file__).parent / "queries.sql"
-RESULTS_DIR = Path(__file__).parent / "results" / "sql"
+ROOT_DIR = Path(__file__).resolve().parents[1]
+QUERIES_PATH = ROOT_DIR / "queries.sql"
+RESULTS_DIR = ROOT_DIR / "results" / "sql"
 HEADER_RE = re.compile(r"^--\s*name:\s*(\w+)\s*\|\s*(.+)$")
 
 
@@ -49,7 +50,7 @@ def run_all(engine: Engine, save: bool = True) -> dict[str, pd.DataFrame]:
 
 
 if __name__ == "__main__":
-    from database import get_engine
+    from db import get_engine
     pd.set_option("display.width", 200)
     pd.set_option("display.max_colwidth", 60)
     eng = get_engine()

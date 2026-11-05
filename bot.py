@@ -13,10 +13,10 @@ from telegram import (BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Me
 from telegram.error import TelegramError
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
-from database import check_connection, get_engine
+from analytics.stats import format_stats
+from db import check_connection, get_engine
 from search import (build_methods, compare_all, log_comparison, log_single, save_feedback, timed_search,
                     unanswered_reason)
-from stats import format_stats
 
 COMPARE = "all"          # режим сравнения всех методов
 DEFAULT_METHOD = COMPARE

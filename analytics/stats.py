@@ -4,7 +4,7 @@ import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-from database import run_query
+from db import run_query
 
 # Общие показатели: вопросы считаются по requests, оценки — по ответам методов
 TOTALS_SQL = """
@@ -206,5 +206,5 @@ def format_stats(engine: Engine) -> str:
 
 
 if __name__ == "__main__":
-    from database import get_engine
+    from db import get_engine
     print(format_stats(get_engine()))

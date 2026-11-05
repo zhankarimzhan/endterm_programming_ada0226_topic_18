@@ -1,4 +1,4 @@
-"""Обратный индекс в PostgreSQL: стеммы слов вопросов FAQ (terms) и их частота в каждом вопросе (faq_terms).
+"""Шаг 4: обратный индекс в PostgreSQL: стеммы слов вопросов FAQ (terms) и их частота в каждом вопросе (faq_terms).
 По нему SQL-запросами считаются частоты слов, документная частота, TF-IDF и похожие вопросы (см. queries.sql)."""
 from collections import Counter
 
@@ -31,6 +31,7 @@ def load_term_index(engine: Engine, faq: pd.DataFrame) -> None:
 
 
 if __name__ == "__main__":
-    from database import get_engine
+    from data_prep.storage import load_faq
+    from db import get_engine
     eng = get_engine()
-    load_term_index(eng, pd.read_sql("SELECT faq_id, question FROM faq ORDER BY faq_id", eng))
+    load_term_index(eng, load_faq(eng))

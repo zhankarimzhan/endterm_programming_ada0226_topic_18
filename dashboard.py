@@ -7,9 +7,9 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from database import check_connection, get_engine
-from stats import (get_chat_log, get_comparison, get_daily, get_evaluation, get_method_stats, get_suggestions,
-                   get_top_matched, get_totals, mark_resolved)
+from analytics.stats import (get_chat_log, get_comparison, get_daily, get_evaluation, get_method_stats, get_suggestions,
+                             get_top_matched, get_totals, mark_resolved)
+from db import check_connection, get_engine
 
 st.set_page_config(page_title="AITU FAQ Bot — статистика", page_icon="📊", layout="centered")
 
@@ -40,7 +40,7 @@ def load(name: str) -> pd.DataFrame | dict:
 
 
 def page_evaluation() -> None:
-    """Качество методов на размеченных тестовых вопросах (init_project.py / evaluation.py)."""
+    """Качество методов на размеченных тестовых вопросах (init_project.py / analytics/evaluation.py)."""
     ev = load("evaluation")
     if ev.empty:
         st.info("Оценка на тестовых вопросах ещё не выполнена: python init_project.py")
@@ -202,7 +202,7 @@ def page_suggestions() -> None:
 
 
 def page_sql() -> None:
-    from queries_runner import load_queries, run_named
+    from analytics.queries_runner import load_queries, run_named
     st.caption("Аналитические запросы из queries.sql к нормализованной схеме PostgreSQL; результат загружается в pandas")
     queries = load_queries()
     name = st.selectbox("Запрос", list(queries), format_func=lambda k: f"{k} — {queries[k]['title']}")

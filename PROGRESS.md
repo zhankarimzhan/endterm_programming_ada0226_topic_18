@@ -69,18 +69,18 @@ SQL-скрипты: `sql/init/01_schema.sql` (таблицы), `02_search.sql` (
 
 | Файл | Что делает |
 |---|---|
-| `database.py` | подключение к PostgreSQL (`get_engine`, `check_connection`, `run_query`, `save_dataframe`, `list_tables`) |
-| `data_loader.py` | скачивание CSV, очистка, сохранение в `data/` и в таблицу `faq` |
-| `preprocessing.py` | токенизация, стоп-слова, стемминг, лемматизация |
-| `methods/` | 5 методов поиска, каждый в своём файле (см. раздел 6) |
-| `term_index.py` | обратный индекс в PostgreSQL (`terms`, `faq_terms`) |
-| `search.py` | подготовка методов (время, память), сравнение всех методов на запросе, запись запросов / кандидатов / отзывов |
-| `stats.py` | SQL-статистика для `/stats` и дашборда (по представлениям `v_method_answers`, `v_unanswered`) |
-| `queries.sql` + `queries_runner.py` | 12 аналитических SQL-запросов; выполнение и загрузка в pandas, CSV в `results/sql/` |
+| `db/` | подключение к PostgreSQL (`get_engine`, `check_connection`, `run_query`, `save_dataframe`, `list_tables`) |
+| `data_prep/` | подготовка данных: `download.py` (CSV) → `cleaning.py` (очистка) → `storage.py` (таблица `faq`) → `term_index.py` (обратный индекс `terms`, `faq_terms`); всё подряд — `pipeline.py` |
+| `preprocessing/` | обработка текста: `normalize.py` (регистр, токены) → `stopwords.py` → `stemming.py` / `lemmatization.py`; вместе — `pipeline.py` (`preprocess`) |
+| `methods/` | 5 методов поиска, каждый в своём файле с алгоритмом по шагам (см. раздел 6) |
+| `search/` | `runner.py` — подготовка методов (время, память), сравнение всех методов на запросе; `history.py` — запись запросов / кандидатов / отзывов |
+| `analytics/stats.py` | SQL-статистика для `/stats` и дашборда (по представлениям `v_method_answers`, `v_unanswered`) |
+| `analytics/evaluation.py` | оценка на тестовых вопросах: P@1, P@3, MRR, время, память |
+| `queries.sql` + `analytics/queries_runner.py` | 12 аналитических SQL-запросов; выполнение и загрузка в pandas, CSV в `results/sql/` |
 | `bot.py` | Telegram-бот: `/start`, `/method`, `/stats`, `/app`, кнопки 👍/👎, альтернативные ответы |
 | `dashboard.py` | дашборд Streamlit (мини-приложение Telegram): статистика, запросы, совпадения, предложения |
 
-### 4. Очистка данных (`data_loader.py`)
+### 4. Очистка данных (`data_prep/cleaning.py`)
 - нормализация пробелов, удаление пустых строк;
 - удаление точных дубликатов;
 - для вопросов с разными ответами оставляется **самый полный (длинный) ответ**;
@@ -110,9 +110,9 @@ SQL-скрипты: `sql/init/01_schema.sql` (таблицы), `02_search.sql` (
 | `methods/embeddings.py` | **Embeddings** | `paraphrase-multilingual-MiniLM-L12-v2` (sentence-transformers), косинусное сходство векторов | нет (исходный текст) | 0.5 |
 | `methods/pg_trgm.py` | **pg_trgm** (доп. метод) | `word_similarity` по триграммам в PostgreSQL | нижний регистр | 0.3 |
 
-`preprocessing.py` — общая предобработка: токенизация, стоп-слова NLTK (вопросительные слова «как», «где», «сколько» сохраняются), стемминг Snowball и лемматизация pymorphy3 (переключается параметром `mode`). Данные NLTK хранятся в `nltk_data/` проекта: NLTK 3.10 не читает каталоги, доступные на запись другим пользователям.
+`preprocessing/` — общая предобработка: токенизация, стоп-слова NLTK (вопросительные слова «как», «где», «сколько» сохраняются), стемминг Snowball и лемматизация pymorphy3 (переключается параметром `mode`). Данные NLTK хранятся в `nltk_data/` проекта: NLTK 3.10 не читает каталоги, доступные на запись другим пользователям.
 
-`search.py` — загружает FAQ из базы, готовит все методы (`build_methods`), регистрирует их в таблице `methods` и пишет историю в `chat_log` с указанием метода.
+`search/runner.py` — загружает FAQ из базы, готовит все методы (`build_methods`), регистрирует их в таблице `methods` и пишет историю в `chat_log` с указанием метода.
 
 Первое сравнение на трёх запросах (лучший ответ каждого метода):
 
@@ -140,7 +140,7 @@ SQL-скрипты: `sql/init/01_schema.sql` (таблицы), `02_search.sql` (
 - Это список того, чего не хватает в FAQ (вкладка «Предложения» в дашборде).
 
 ### 9. Статистика `/stats` (для всех пользователей)
-Считается SQL-запросами (`stats.py`): всего вопросов, найдено / не найдено, 👍 / 👎, по каждому методу — % найденных, среднее сходство, % довольных и место (`RANK()`), частые вопросы без ответа.
+Считается SQL-запросами (`analytics/stats.py`): всего вопросов, найдено / не найдено, 👍 / 👎, по каждому методу — % найденных, среднее сходство, % довольных и место (`RANK()`), частые вопросы без ответа.
 
 ### 10. Дашборд — мини-приложение Telegram (`dashboard.py`, Streamlit)
 Закрывает требование 7 («мини-дашборд на Streamlit с фильтрами»). Вкладки:
@@ -175,7 +175,7 @@ SQL-скрипты: `sql/init/01_schema.sql` (таблицы), `02_search.sql` (
 
 ### 12. SQL-аналитика — требование 10 (`queries.sql`)
 
-13 запросов к нормализованной схеме; выполняются `queries_runner.py` (результаты → pandas → `results/sql/*.csv`) и во вкладке «SQL» дашборда.
+13 запросов к нормализованной схеме; выполняются `analytics/queries_runner.py` (результаты → pandas → `results/sql/*.csv`) и во вкладке «SQL» дашборда.
 
 | Ключ | Что считает | Конструкции |
 |---|---|---|
@@ -202,7 +202,7 @@ SQL-скрипты: `sql/init/01_schema.sql` (таблицы), `02_search.sql` (
 `init_project.py` — отдельный скрипт, запускается **один раз** после `docker-compose up -d`:
 1. загружает FAQ и строит обратный индекс (если база пуста);
 2. готовит методы;
-3. `evaluation.py`: прогоняет тестовые вопросы через все методы **и варианты с лемматизацией** → `test_queries`, `runs` (P@1, P@3, MRR, время, память), `predictions` (топ-3 каждого метода); отправляет те же вопросы «в бота» — запросы в режиме `test` с 👍 правильному ответу (видны в `/stats`, дашборде, SQL).
+3. `analytics/evaluation.py`: прогоняет тестовые вопросы через все методы **и варианты с лемматизацией** → `test_queries`, `runs` (P@1, P@3, MRR, время, память), `predictions` (топ-3 каждого метода); отправляет те же вопросы «в бота» — запросы в режиме `test` с 👍 правильному ответу (видны в `/stats`, дашборде, SQL).
 
 Повторный запуск ничего не дублирует; `--force` — пересчитать.
 
@@ -235,8 +235,8 @@ cp .env.example .env          # вписать пароль базы, TELEGRAM_B
 docker-compose up -d          # поднять PostgreSQL
 python -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python init_project.py  # первичный запуск: FAQ, индекс, оценка на тестовых вопросах (один раз)
-.venv/bin/python search.py        # проверить поиск всеми методами
-.venv/bin/python stats.py         # статистика в консоли
+.venv/bin/python -m search.runner    # проверить поиск всеми методами
+.venv/bin/python -m analytics.stats  # статистика в консоли
 
 # каждое в своём терминале:
 .venv/bin/streamlit run dashboard.py                                   # дашборд, http://localhost:8501
@@ -248,16 +248,16 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt
 ```bash
 docker exec -i faq-postgres psql -v ON_ERROR_STOP=1 -U faq -d faq_db < sql/migrations/001_normalize.sql
 docker exec -i faq-postgres psql -v ON_ERROR_STOP=1 -U faq -d faq_db < sql/init/03_views.sql
-.venv/bin/python term_index.py
+.venv/bin/python -m data_prep.term_index
 ```
-SQL-аналитика: `.venv/bin/python queries_runner.py`.
+SQL-аналитика: `.venv/bin/python -m analytics.queries_runner`.
 
-⚠️ `data_loader.py` при перезаписи делает `TRUNCATE faq CASCADE` — вместе с FAQ очищаются кандидаты, отзывы и обратный индекс (индекс перестраивается автоматически).
+⚠️ `data_prep/storage.py` (`load_to_db(replace=True)`) при перезаписи делает `TRUNCATE faq CASCADE` — вместе с FAQ очищаются кандидаты, отзывы и обратный индекс (индекс перестраивается автоматически).
 
 ## Что дальше
 
 - [x] Получить токен у @BotFather, вписать в `.env`, проверить бота вживую
-- [x] `preprocessing.py`: токенизация, стоп-слова, стемминг (Snowball) и лемматизация (pymorphy3)
+- [x] `preprocessing/`: токенизация, стоп-слова, стемминг (Snowball) и лемматизация (pymorphy3)
 - [x] Методы поиска в `methods/`: rule-based (baseline), BoW, TF-IDF, embeddings, pg_trgm
 - [x] Выбор метода в боте (`/method`)
 - [x] Отзывы 👍/👎, сохранение вопросов без ответа, альтернативные ответы

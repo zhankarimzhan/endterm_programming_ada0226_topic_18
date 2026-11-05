@@ -2,7 +2,7 @@
 сравнение стемминга и лемматизации. Результаты -> runs / predictions.
 Тестовые вопросы также записываются как запросы в режиме 'test' с 👍 правильному ответу —
 чтобы попасть в статистику бота, дашборд и SQL-аналитику.
-Запускается из init_project.py (первичный запуск проекта) или отдельно: python evaluation.py [--force]."""
+Запускается из init_project.py (первичный запуск проекта) или отдельно: python -m analytics.evaluation [--force]."""
 import argparse
 import logging
 from pathlib import Path
@@ -14,7 +14,7 @@ from sqlalchemy.engine import Engine
 from methods import METHOD_CLASSES, SimilarityMethod
 from search import compare_all, load_faq, log_comparison, register_methods, save_feedback, timed_search
 
-TEST_PATH = Path(__file__).parent / "data" / "test_queries.csv"
+TEST_PATH = Path(__file__).resolve().parents[1] / "data" / "test_queries.csv"
 K = 3                                              # глубина поиска: Precision@1, Precision@3, MRR по топ-3
 LEMMA_VARIANTS = ("rule_based", "bow", "tfidf")    # методы с предобработкой — сравниваем стемминг и лемматизацию
 
@@ -148,7 +148,7 @@ def format_results(df: pd.DataFrame) -> str:
 
 
 if __name__ == "__main__":
-    from database import check_connection, get_engine
+    from db import check_connection, get_engine
     from search import build_methods
     parser = argparse.ArgumentParser(description="Оценка методов на тестовых вопросах")
     parser.add_argument("--force", action="store_true", help="пересчитать, даже если оценка уже есть")

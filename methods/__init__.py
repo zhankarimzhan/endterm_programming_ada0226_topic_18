@@ -1,4 +1,5 @@
-"""Реестр методов поиска похожего вопроса."""
+"""Методы поиска похожего вопроса: по файлу на метод, в каждом — алгоритм по шагам.
+Порядок — от простого к сложному: rule_based → bow → tfidf → embeddings → pg_trgm (SQL)."""
 from methods.base import SimilarityMethod
 from methods.bow import BowMethod
 from methods.embeddings import EmbeddingsMethod
