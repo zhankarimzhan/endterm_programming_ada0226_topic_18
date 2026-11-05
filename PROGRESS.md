@@ -233,7 +233,10 @@ SQL-скрипты: `sql/init/01_schema.sql` (таблицы), `02_search.sql` (
 ## Как запустить
 
 ```bash
-cp .env.example .env          # вписать пароль базы, TELEGRAM_BOT_TOKEN, DASHBOARD_KEY
+./run.sh                      # всё одной командой: база, зависимости, данные, API + дашборд, бот (--no-bot — без бота)
+
+# или по шагам:
+[ -f .env ] || cp .env.example .env   # только если .env ещё нет; вписать пароль базы, TELEGRAM_BOT_TOKEN, DASHBOARD_KEY
 docker-compose up -d          # поднять PostgreSQL
 python -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python init_project.py  # первичный запуск: FAQ, индекс, оценка на тестовых вопросах (один раз)
