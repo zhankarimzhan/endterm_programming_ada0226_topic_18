@@ -18,12 +18,12 @@ die()  { printf '\033[1;31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 # ---------- 1. .env ----------
 if [[ ! -f .env ]]; then
     cp .env.example .env
-    die "Создан .env из шаблона. Впишите POSTGRES_PASSWORD, TELEGRAM_BOT_TOKEN и DASHBOARD_KEY и запустите снова."
+    die "Создан .env из шаблона. Впишите POSTGRES_PASSWORD и TELEGRAM_BOT_TOKEN (DASHBOARD_KEY — по желанию) и запустите снова."
 fi
 set -a; source .env; set +a
 [[ -n "${POSTGRES_PASSWORD:-}" && -n "${POSTGRES_USER:-}" && -n "${POSTGRES_DB:-}" ]] \
     || die "В .env не заданы POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB"
-[[ -z "${DASHBOARD_KEY:-}" ]] && warn "DASHBOARD_KEY пуст — дашборд и API открыты без ключа"
+[[ -z "${DASHBOARD_KEY:-}" ]] && say "Дашборд и API открыты без ключа (DASHBOARD_KEY пуст)"
 
 # ---------- 2. база ----------
 if docker compose version >/dev/null 2>&1; then COMPOSE="docker compose"; else COMPOSE="docker-compose"; fi

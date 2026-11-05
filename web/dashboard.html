@@ -156,7 +156,12 @@ details summary { cursor: pointer; color: var(--ink-2); font-size: .84rem; }
 <script>
 "use strict";
 // ---------- API ----------
-const KEY = new URLSearchParams(location.search).get("key") || "";
+// Ключ доступа: из адреса (?key=, так открывает бот) или сохранённый в этом браузере.
+const store = { get() { try { return localStorage.getItem("dashboardKey") || ""; } catch (e) { return ""; } },
+                set(v) { try { v ? localStorage.setItem("dashboardKey", v) : localStorage.removeItem("dashboardKey"); } catch (e) {} } };
+let KEY = new URLSearchParams(location.search).get("key") || store.get();
+if (new URLSearchParams(location.search).has("key")) store.set(KEY);
+class AccessError extends Error {}
 const cache = new Map();
 
 async function api(path, options = {}) {
@@ -165,7 +170,8 @@ async function api(path, options = {}) {
   if (!res.ok) {
     let detail = res.statusText;
     try { detail = (await res.json()).detail || detail; } catch (e) {}
-    throw new Error(res.status === 403 ? "Нет доступа: откройте дашборд из бота командой /app" : `Ошибка API (${res.status}): ${detail}`);
+    if (res.status === 403) throw new AccessError(KEY ? "Ключ не подошёл" : "");
+    throw new Error(`Ошибка API (${res.status}): ${detail}`);
   }
   return res.json();
 }
@@ -606,6 +612,21 @@ async function pageSql(view) {
 
 // ---------- router ----------
 const PAGES = { stats: pageStats, requests: pageRequests, matches: pageMatches, suggestions: pageSuggestions, sql: pageSql };
+function askKey(view, problem) {
+  store.set("");
+  view.innerHTML = card("Нужен ключ доступа", "Ключ — значение DASHBOARD_KEY из файла .env проекта. Его же показывает ./run.sh при запуске, а из Telegram дашборд открывается с ключом сам (команда /app). Ключ запомнится в этом браузере.", `
+    ${problem ? `<div class="err">${esc(problem)}</div>` : ""}
+    <form class="searchrow" id="key-form"><input id="key-input" type="password" placeholder="DASHBOARD_KEY" required autocomplete="current-password"><button class="btn primary" type="submit">Открыть</button></form>`);
+  $("#key-input").focus();
+  $("#key-form").addEventListener("submit", e => {
+    e.preventDefault();
+    KEY = $("#key-input").value.trim();
+    store.set(KEY);
+    cache.clear();
+    route();
+  });
+}
+
 async function route() {
   const name = PAGES[location.hash.slice(1)] ? location.hash.slice(1) : "stats";
   document.querySelectorAll("nav.tabs a").forEach(a => a.hash === `#${name}` ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
@@ -613,7 +634,10 @@ async function route() {
   charts.length = 0;
   view.innerHTML = `<div class="count">Загрузка…</div>`;
   try { await PAGES[name](view); }
-  catch (err) { view.innerHTML = `<div class="err">${esc(err.message)}</div>`; }
+  catch (err) {
+    if (err instanceof AccessError) { askKey(view, err.message); return; }
+    view.innerHTML = `<div class="err">${esc(err.message)}</div>`;
+  }
   $("#updated").textContent = `обновлено ${new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`;
 }
 addEventListener("hashchange", route);
