@@ -258,7 +258,7 @@ footer { color: var(--muted); font-size: .85rem; border-top: 1px solid var(--lin
           <div class="stage"><b>Обработка текста</b><code>preprocessing/</code><p>регистр, слова, стоп-слова, стемминг или лемматизация</p></div>
           <div class="stage"><b>Методы</b><code>methods/</code><p>fit() строит индекс, scores() считает сходство</p></div>
           <div class="stage"><b>Поиск и история</b><code>search/</code><p>все методы на одном запросе, запись в базу</p></div>
-          <div class="stage"><b>Интерфейс и аналитика</b><code>bot.py · dashboard.py · analytics/</code><p>ответ, 👍/👎, статистика, метрики</p></div>
+          <div class="stage"><b>Интерфейс и аналитика</b><code>bot.py · dashboard.py · analytics/</code><p>ответ, статистика, метрики, API</p></div>
         </div>
       </div>
     </section>
@@ -272,7 +272,7 @@ footer { color: var(--muted); font-size: .85rem; border-top: 1px solid var(--lin
           <header><code>/</code><span>корень: то, что запускают руками</span></header>
           <dl>
             <dt>init_project.py</dt><dd>первичный запуск, один раз: загрузка FAQ, обратный индекс, оценка на тестовых вопросах. Повторный запуск ничего не дублирует, <code>--force</code> пересчитывает оценку</dd>
-            <dt>bot.py</dt><dd>Telegram-бот: <code>/start</code>, <code>/method</code>, <code>/stats</code>, <code>/app</code>, кнопки 👍/👎. По умолчанию отвечает всеми методами сразу</dd>
+            <dt>bot.py</dt><dd>Telegram-бот: <code>/start</code>, <code>/method</code>, <code>/stats</code>, <code>/app</code>. По умолчанию отвечает всеми методами сразу</dd>
             <dt>dashboard.py</dt><dd>дашборд Streamlit (мини-приложение Telegram): статистика, запросы, совпадения, предложения, SQL</dd>
             <dt>queries.sql</dt><dd>13 аналитических SQL-запросов (оконные функции, CTE, self-JOIN)</dd>
             <dt>sql/init/</dt><dd><code>01_schema.sql</code> таблицы, <code>02_search.sql</code> расширение pg_trgm, <code>03_views.sql</code> представления</dd>
@@ -314,7 +314,7 @@ footer { color: var(--muted); font-size: .85rem; border-top: 1px solid var(--lin
           <header><code>search/</code> <code>db/</code> <code>analytics/</code><span>вокруг методов</span></header>
           <dl>
             <dt>search/runner.py</dt><dd>обучение методов с замером времени и памяти, <code>compare_all()</code></dd>
-            <dt>search/history.py</dt><dd>запись запросов, кандидатов и отзывов</dd>
+            <dt>search/history.py</dt><dd>запись запросов и кандидатов</dd>
             <dt>db/connection.py</dt><dd>подключение по <code>.env</code>, <code>run_query()</code></dd>
             <dt>analytics/evaluation.py</dt><dd>P@1, P@3, MRR на тестовых вопросах</dd>
             <dt>analytics/stats.py</dt><dd>статистика для <code>/stats</code> и дашборда</dd>
@@ -574,16 +574,15 @@ cos      2 / (2 · 2) = 0.50   → неверный ответ</div>
     <section id="bot">
       <div class="eyebrow">07 · search/history.py · sql/init/</div>
       <h2>Что пишется в базу на один вопрос</h2>
-      <p class="lede">Схема нормализована: вопрос, запуск метода, кандидаты и отзыв хранятся в разных таблицах. Всё, что можно вычислить, вычисляется представлениями, а не хранится.</p>
+      <p class="lede">Схема нормализована: вопрос, запуск метода и кандидаты хранятся в разных таблицах. Всё, что можно вычислить, вычисляется представлениями, а не хранится.</p>
       <div class="flow">
         <div class="flow-row"><code class="t">requests</code><p>1 строка: текст вопроса и режим (<code>compare</code> — все методы, <code>single</code> — один метод, <code>test</code> — тестовые вопросы из <code>init_project.py</code>).</p></div>
         <div class="flow-row"><code class="t">method_runs</code><p>по строке на каждый метод: какой метод и сколько миллисекунд занял поиск.</p></div>
         <div class="flow-row"><code class="t">candidates</code><p>топ-3 каждого метода: место, <code>faq_id</code>, сходство. На один вопрос в режиме сравнения это 15 строк.</p></div>
-        <div class="flow-row"><code class="t">feedback</code><p>👍 или 👎 пользователя на конкретный ответ (<code>faq_id</code>). Отзыв привязан к ответу, а не к методу: если два метода дали один и тот же ответ, отзыв засчитывается обоим.</p></div>
-        <div class="flow-row"><code class="t">v_method_answers</code><p>представление: ответ каждого метода на каждый вопрос, прошёл ли он порог (<code>found</code>) и засчитан ли (<code>helpful</code>). Если пользователь одобрил другой ответ, а этот не оценил, ответ этого метода считается ошибкой.</p></div>
-        <div class="flow-row"><code class="t">v_unanswered</code><p>представление: вопросы без подходящего ответа. <code>not_found</code> — никто не прошёл порог, <code>bad_answer</code> — все ответы отклонены. Отсюда берутся предложения для пополнения FAQ.</p></div>
+        <div class="flow-row"><code class="t">v_method_answers</code><p>представление: ответ каждого метода на каждый вопрос и прошёл ли он порог (<code>found</code>). «Найден» не значит «верный»: верность проверяется только на тестовых вопросах.</p></div>
+        <div class="flow-row"><code class="t">v_unanswered</code><p>представление: вопросы, на которые ни один метод не нашёл ответа выше порога. Отсюда берутся предложения для пополнения FAQ.</p></div>
         <div class="flow-row"><code class="t">methods</code><p>справочник: имя, тип обработки, порог, время подготовки и память. Вариант с лемматизацией хранится как отдельный метод.</p></div>
-        <div class="flow-row"><code class="t">test_queries · runs · predictions</code><p>оценка на тестовых вопросах: 40 вопросов, метрики каждого прогона и топ-3 каждого метода по каждому вопросу.</p></div>
+        <div class="flow-row"><code class="t">test_queries · runs · predictions</code><p>оценка на тестовых вопросах: два набора (40 базовых перефраз и 64 формулировки 10 вопросов разных типов), допустимые ответы в <code>test_acceptable</code>, метрики каждого прогона и топ-3 каждого метода. Представление <code>v_test_hits</code> даёт место верного ответа и уверенные ошибки.</p></div>
       </div>
     </section>
 
@@ -624,13 +623,13 @@ cos      2 / (2 · 2) = 0.50   → неверный ответ</div>
       <p class="lede">Порядок совпадает с путём данных. После каждого шага есть вопрос для самопроверки.</p>
       <ol class="steps">
         <li><div><h3>data_prep/ <code>download → cleaning → storage</code></h3><p>Откуда данные и почему из 608 строк осталось 556.</p><p class="q">Почему при противоречии оставляется самый длинный ответ и чем это плохо?</p></div></li>
-        <li><div><h3>sql/init/01_schema.sql <code>docs/er_diagram.md</code></h3><p>13 таблиц, связи, третья нормальная форма.</p><p class="q">Зачем requests отдельно от method_runs? Почему feedback не привязан к методу?</p></div></li>
+        <li><div><h3>sql/init/01_schema.sql <code>docs/er_diagram.md</code></h3><p>13 таблиц, связи, третья нормальная форма.</p><p class="q">Зачем requests отдельно от method_runs? Зачем допустимые ответы вынесены в отдельную таблицу?</p></div></li>
         <li><div><h3>preprocessing/</h3><p>Нормализация, слова, стоп-слова, стемминг или лемматизация.</p><p class="q">Почему «как» и «сколько» не удаляются? Чем стемма отличается от леммы?</p></div></li>
         <li><div><h3>methods/base.py</h3><p>Общий интерфейс fit / scores / search и замер памяти через pickle.</p><p class="q">Почему память embeddings считается вместе с моделью?</p></div></li>
         <li><div><h3>methods/ <code>rule_based → bow → tfidf → embeddings → pg_trgm</code></h3><p>От простого к сложному, в каждом файле алгоритм по шагам в начале.</p><p class="q">Посчитайте сходство руками на одном примере для каждого метода.</p></div></li>
         <li><div><h3>data_prep/term_index.py <code>queries.sql</code></h3><p>Обратный индекс и TF-IDF, посчитанный в SQL (frequent_terms, tfidf_keywords).</p><p class="q">Совпадают ли ключевые слова из SQL с весами TfidfVectorizer? Почему могут не совпадать?</p></div></li>
-        <li><div><h3>search/ <code>runner.py, history.py</code></h3><p>build_methods, compare_all, запись запросов, кандидатов и отзывов.</p><p class="q">Что пишется в базу на один вопрос пользователя?</p></div></li>
-        <li><div><h3>sql/init/03_views.sql</h3><p>v_method_answers и v_unanswered: когда ответ засчитан, а когда нет.</p><p class="q">Почему 👍 одному ответу означает 👎 остальным методам? Где это допущение ломается?</p></div></li>
+        <li><div><h3>search/ <code>runner.py, history.py</code></h3><p>build_methods, compare_all, запись запросов и кандидатов.</p><p class="q">Что пишется в базу на один вопрос пользователя?</p></div></li>
+        <li><div><h3>sql/init/03_views.sql</h3><p>v_method_answers, v_unanswered, v_test_hits: найден ли ответ и верен ли он на тестах.</p><p class="q">Чем «найден» отличается от «верный»? Что такое уверенная ошибка?</p></div></li>
         <li><div><h3>analytics/evaluation.py <code>init_project.py</code></h3><p>Тестовый набор, допустимые ответы, P@1, P@3, MRR.</p><p class="q">Посчитайте MRR руками на трёх запросах.</p></div></li>
         <li><div><h3>analytics/stats.py <code>dashboard.py, bot.py</code></h3><p>Интерфейс поверх всего остального.</p></div></li>
       </ol>

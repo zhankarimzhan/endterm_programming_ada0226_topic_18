@@ -7,8 +7,8 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from analytics.stats import (get_chat_log, get_comparison, get_daily, get_evaluation, get_method_stats, get_suggestions,
-                             get_top_matched, get_totals, mark_resolved)
+from analytics.stats import (get_chat_log, get_comparison, get_daily, get_evaluation, get_evaluation_breakdown,
+                             get_method_stats, get_suggestions, get_top_matched, get_totals, mark_resolved)
 from db import check_connection, get_engine
 
 st.set_page_config(page_title="AITU FAQ Bot — статистика", page_icon="📊", layout="centered")
@@ -46,10 +46,13 @@ def page_evaluation() -> None:
         st.info("Оценка на тестовых вопросах ещё не выполнена: python init_project.py")
         return
     st.subheader("Оценка на тестовых вопросах")
-    st.caption(f"{int(ev['test_queries'].max())} перефразированных вопросов из FAQ (data/test_queries.csv). "
+    sets = {"base": "базовые перефразы (data/test_queries.csv)", "paraphrases": "разные формулировки (data/paraphrases.csv)"}
+    test_set = st.radio("Набор", [k for k in sets if k in set(ev["test_set"])], format_func=sets.get, horizontal=True)
+    ev = ev[ev["test_set"] == test_set]
+    st.caption(f"{int(ev['test_queries'].max())} вопросов. "
                "P@1 — правильный ответ первым, P@3 — в топ-3, MRR — средняя обратная позиция правильного ответа. "
                "Методы со стеммингом и лемматизацией — отдельные строки")
-    st.dataframe(ev.drop(columns="created_at").rename(columns={
+    st.dataframe(ev.drop(columns=["created_at", "test_set"]).rename(columns={
         "method": "метод", "preprocessing": "предобработка", "p_at_1": "P@1", "p_at_3": "P@3", "mrr": "MRR",
         "time_ms": "поиск, мс", "memory_mb": "память, МБ", "test_queries": "вопросов", "place": "место"}),
         hide_index=True, width="stretch")
@@ -57,6 +60,12 @@ def page_evaluation() -> None:
     long["метрика"] = long["метрика"].map({"p_at_1": "P@1", "p_at_3": "P@3", "mrr": "MRR"})
     st.plotly_chart(px.bar(long, x="значение", y="method", color="метрика", barmode="group", orientation="h",
                            range_x=[0, 1], labels={"method": ""}, height=420), width="stretch")
+    if test_set == "paraphrases":
+        by = st.radio("Разбивка", ["type", "topic"], format_func={"type": "по типу формулировки", "topic": "по теме"}.get,
+                      horizontal=True)
+        br = get_evaluation_breakdown(engine(), by)
+        st.caption("P@1 по каждому методу; «уверенные ошибки» — неверный ответ со сходством выше порога метода")
+        st.dataframe(br.pivot_table(index="bucket", columns="method", values="p_at_1"), width="stretch")
 
 
 def page_stats() -> None:
@@ -64,30 +73,23 @@ def page_stats() -> None:
     if not t["questions"]:
         st.info("Пока нет ни одного вопроса — напишите боту.")
         return
-    rated = t["likes"] + t["dislikes"]
     page_evaluation()
     c1, c2, c3 = st.columns(3)
-    c1.metric("Вопросов", t["questions"], help=f"из них тестовых: {t['test_questions']}")
+    c1.metric("Вопросов", t["questions"])
     c2.metric("Ответ найден", f"{round(100 * t['answered'] / t['questions'])}%")
-    c3.metric("Довольны", f"{round(100 * t['likes'] / rated)}%" if rated else "—", help="доля 👍 среди оценённых ответов методов")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Не найдено", t["not_found"])
-    c2.metric("👍", t["likes"])
-    c3.metric("👎", t["dislikes"])
+    c3.metric("Не найдено", t["not_found"])
 
     st.subheader("Сравнение методов")
-    st.caption("Качество — доля 👍 среди оценённых ответов метода; время — среднее время поиска одного ответа; "
+    st.caption("Качество — MRR на тестовых вопросах; время — среднее время поиска одного ответа; "
                "память — размер индекса (для embeddings — вместе с моделью, для pg_trgm — таблица в PostgreSQL)")
     m = load("methods")
     st.dataframe(m.rename(columns={"name": "метод", "questions": "ответов", "answered": "найдено",
-                                   "found_pct": "найдено, %", "avg_score": "ср. сходство", "likes": "👍",
-                                   "dislikes": "👎", "satisfaction_pct": "довольны, %", "avg_latency_ms": "поиск, мс",
+                                   "found_pct": "найдено, %", "avg_score": "ср. сходство", "mrr_base": "MRR (база)",
+                                   "mrr_paraphrases": "MRR (формулировки)", "avg_latency_ms": "поиск, мс",
                                    "memory_mb": "память, МБ", "fit_seconds": "подготовка, с", "rank": "место"}),
                  hide_index=True, width="stretch")
-    long = m.melt(id_vars="name", value_vars=["found_pct", "satisfaction_pct"], var_name="показатель", value_name="%")
-    long["показатель"] = long["показатель"].map({"found_pct": "ответ найден", "satisfaction_pct": "довольны"})
-    st.plotly_chart(px.bar(long, x="name", y="%", color="показатель", barmode="group",
-                           labels={"name": "метод"}, range_y=[0, 100]), width="stretch")
+    st.plotly_chart(px.bar(m, x="name", y="found_pct", labels={"name": "метод", "found_pct": "ответ найден, %"},
+                           range_y=[0, 100]), width="stretch")
     if m["avg_latency_ms"].notna().any():
         c1, c2 = st.columns(2)
         c1.plotly_chart(px.bar(m, x="name", y="avg_latency_ms", log_y=True, title="Время поиска, мс (лог. шкала)",
@@ -109,25 +111,21 @@ def page_queries() -> None:
         st.info("Пока нет вопросов.")
         return
     with st.expander("Фильтры", expanded=True):
-        modes = st.multiselect("Режим", ["compare", "single", "test"], default=["compare", "single"],
-                               help="test — тестовые вопросы из init_project.py")
+        modes = st.multiselect("Режим", ["compare", "single"], default=["compare", "single"])
         methods_sel = st.multiselect("Метод", sorted(log["method"].dropna().unique()))
         status = st.radio("Результат", ["все", "найден", "не найден"], horizontal=True)
-        fb = st.radio("Отзыв", ["все", "👍", "👎", "без отзыва"], horizontal=True)
         text = st.text_input("Поиск по тексту вопроса")
     df = log[log["mode"].isin(modes)] if modes else log
     if methods_sel:
         df = df[df["method"].isin(methods_sel)]
     if status != "все":
         df = df[df["found"] == (status == "найден")]
-    if fb != "все":
-        df = df[df["feedback"] == ("" if fb == "без отзыва" else fb)]
     if text:
         df = df[df["user_query"].str.contains(text, case=False, regex=False)]
     st.caption(f"Найдено записей: {len(df)}")
-    st.dataframe(df[["asked_at", "user_query", "method", "matched_question", "score", "feedback"]]
+    st.dataframe(df[["asked_at", "user_query", "method", "matched_question", "score"]]
                  .rename(columns={"asked_at": "время", "user_query": "вопрос", "method": "метод",
-                                  "matched_question": "найденный вопрос FAQ", "score": "сходство", "feedback": "отзыв"}),
+                                  "matched_question": "найденный вопрос FAQ", "score": "сходство"}),
                  hide_index=True, width="stretch")
     with st.expander("Ответ на выбранный вопрос"):
         answered = df[df["found"]]
@@ -144,10 +142,9 @@ def page_matches() -> None:
     comp = load("comparison")
     if not comp.empty:
         st.subheader("Ответы всех методов на каждый запрос")
-        st.caption("✓ — метод нашёл ответ (выше порога); отзыв пользователя: 👍 подошёл, 👎 не подошёл")
+        st.caption("✗ — метод не нашёл ответ выше своего порога")
         comp = comp.assign(cell=comp["matched_question"].fillna("✗ не найдено").str.slice(0, 50)
-                           + " · " + comp["score"].astype(str) + " · " + comp["latency_ms"].astype(str) + " мс "
-                           + comp["feedback"])
+                           + " · " + comp["score"].astype(str) + " · " + comp["latency_ms"].astype(str) + " мс")
         table = (comp.pivot_table(index=["asked_at", "user_query"], columns="method", values="cell", aggfunc="first")
                  .sort_index(ascending=False).reset_index()
                  .rename(columns={"asked_at": "время", "user_query": "вопрос"}))
@@ -166,7 +163,8 @@ def page_matches() -> None:
     top = load("top")
     if not top.empty:
         st.subheader("Чаще всего выдаваемые ответы")
-        st.dataframe(top.rename(columns={"question": "вопрос FAQ", "times": "раз", "avg_score": "ср. сходство"})
+        st.dataframe(top.rename(columns={"question": "вопрос FAQ", "times": "раз", "requests": "запросов",
+                                         "avg_score": "ср. сходство"})
                      .drop(columns="faq_id"), hide_index=True, width="stretch")
 
     st.subheader("Проверить вопрос всеми методами")
@@ -184,13 +182,13 @@ def page_matches() -> None:
 
 
 def page_suggestions() -> None:
-    st.caption("Вопросы, на которые бот не нашёл ответа или ответ не подошёл (👎) — кандидаты для пополнения FAQ")
+    st.caption("Вопросы, на которые ни один метод не нашёл ответа выше порога — кандидаты для пополнения FAQ")
     sug = load("suggestions")
     if sug.empty:
         st.success("Необработанных вопросов нет.")
         return
     st.dataframe(sug.drop(columns="ids").rename(columns={
-        "question": "вопрос", "times": "раз", "reasons": "причина", "methods": "методы",
+        "question": "вопрос", "times": "раз",
         "best_candidate": "что предложил бот", "best_score": "сходство", "last_asked": "последний раз"}),
         hide_index=True, width="stretch")
     done = st.multiselect("Отметить как обработанные (ответ добавлен в FAQ)", range(len(sug)),

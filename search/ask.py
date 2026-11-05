@@ -6,7 +6,7 @@ from sqlalchemy.engine import Engine
 
 from methods import SimilarityMethod
 from preprocessing.explain import explain
-from search.history import log_comparison, unanswered_reason
+from search.history import log_comparison
 from search.runner import compare_all
 
 
@@ -59,7 +59,6 @@ def ask(engine: Engine, methods: dict[str, SimilarityMethod], text: str, k: int 
             "distinct_answers": len({r["best"]["faq_id"] for r in found}),
             "agreement": round(answer["votes"] / len(found), 2) if answer else None,
             "fastest": min(rows, key=lambda r: r["latency_ms"])["method"].name if rows else None,
-            "unanswered_reason": unanswered_reason(engine, request_id) if save else (None if found else "not_found"),
         },
         "methods": [method_row(r) for r in rows],
     }

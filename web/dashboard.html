@@ -88,6 +88,8 @@ main { padding-block: 20px 48px; display: grid; gap: 16px; }
 .tbl thead th { border-top: 0; background: var(--bg); color: var(--ink-2); font-weight: 600; font-size: .76rem; white-space: nowrap; position: sticky; top: 0; }
 .tbl td.n, .tbl th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tbl tbody tr:hover td { background: var(--accent-soft); }
+.heat td.n { min-width: 64px; }
+.heat tbody tr:hover td { filter: brightness(.97); }
 .tbl.scroll { max-height: 520px; overflow-y: auto; }
 .tbl tr.open td { background: var(--accent-soft); }
 .tbl tr.answer td { background: var(--bg); color: var(--ink-2); white-space: pre-wrap; }
@@ -143,6 +145,7 @@ details summary { cursor: pointer; color: var(--ink-2); font-size: .84rem; }
     </div>
     <nav class="tabs" aria-label="Разделы">
       <a href="#stats">Статистика</a>
+      <a href="#eval">Оценка</a>
       <a href="#requests">Запросы</a>
       <a href="#matches">Совпадения</a>
       <a href="#suggestions">Предложения</a>
@@ -189,7 +192,7 @@ const dt = s => s ? new Date(s).toLocaleString("ru-RU", { day: "2-digit", month:
 const day = s => new Date(s).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
 const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const SERIES = ["--s1", "--s2", "--s3"];
-const MODES = { compare: "сравнение", single: "один метод", test: "тестовые" };
+const MODES = { compare: "сравнение", single: "один метод" };
 const PREP = { stem: "стемминг", lemma: "лемматизация", none: "нет", lower: "нижний регистр" };
 
 function card(title, hint, body = "") {
@@ -204,7 +207,6 @@ function table(cols, rows, { cls = "", rowAttr = () => "" } = {}) {
 function legend(items) {
   return `<div class="legend">${items.map(it => `<span><span class="key" style="background:var(${it.color})"></span>${esc(it.label)}</span>`).join("")}</div>`;
 }
-function fbPill(f) { return f === "👍" ? `<span class="pill ok">👍</span>` : f === "👎" ? `<span class="pill no">👎</span>` : ""; }
 function downloadCsv(name, columns, rows) {
   const q = v => v == null ? "" : /[",\n;]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
   const text = "﻿" + [columns.map(q).join(","), ...rows.map(r => r.map(q).join(","))].join("\n");
@@ -356,25 +358,20 @@ function trim(s, n) { s = String(s ?? ""); n = Math.max(4, Math.floor(n)); retur
 
 // ---------- pages ----------
 async function pageStats(view) {
-  const [t, ev, m, daily] = await Promise.all([load("/api/totals"), load("/api/evaluation"), load("/api/methods"), load("/api/daily")]);
-  if (!t.questions) { view.innerHTML = card("", "", `<div class="empty">Пока нет ни одного вопроса: напишите боту.</div>`); return; }
-  const rated = t.likes + t.dislikes;
+  const [t, m, daily] = await Promise.all([load("/api/totals"), load("/api/methods"), load("/api/daily")]);
+  if (!t.questions) { view.innerHTML = card("", "", `<div class="empty">Пока нет ни одного вопроса: напишите боту. Качество методов на тестовых вопросах — во вкладке «Оценка».</div>`); return; }
   view.innerHTML = `
-    <div class="tiles">
-      <div class="tile"><span class="l">Вопросов</span><span class="v">${num(t.questions)}</span><span class="s">из них тестовых ${num(t.test_questions)}</span></div>
+    <div class="tiles" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">
+      <div class="tile"><span class="l">Вопросов</span><span class="v">${num(t.questions)}</span><span class="s">от пользователей бота и API</span></div>
       <div class="tile"><span class="l">Ответ найден</span><span class="v">${pct(100 * t.answered / t.questions)}</span><span class="s">${num(t.answered)} вопросов</span></div>
-      <div class="tile"><span class="l">Довольны</span><span class="v">${rated ? pct(100 * t.likes / rated) : "—"}</span><span class="s">доля 👍 среди оценённых</span></div>
-      <div class="tile"><span class="l">Не найдено</span><span class="v">${num(t.not_found)}</span><span class="s">ни один метод</span></div>
-      <div class="tile"><span class="l">👍</span><span class="v">${num(t.likes)}</span><span class="s">ответов методов</span></div>
-      <div class="tile"><span class="l">👎</span><span class="v">${num(t.dislikes)}</span><span class="s">ответов методов</span></div>
+      <div class="tile"><span class="l">Не найдено</span><span class="v">${num(t.not_found)}</span><span class="s">ни один метод выше порога</span></div>
     </div>
-    <div id="ev"></div>
-    ${card("Сравнение методов", "Качество — доля 👍 среди оценённых ответов метода. Время — среднее время поиска одного ответа. Память — индекс метода (для embeddings вместе с моделью, для pg_trgm — таблица в PostgreSQL).",
-      `${legend([{ label: "ответ найден, %", color: "--s1" }, { label: "довольны, %", color: "--s2" }])}<div class="chart" id="c-methods"></div>` +
+    ${card("Сравнение методов", "Найдено — доля вопросов пользователей, где сходство выше порога метода (это не значит, что ответ верный). Качество — MRR на тестовых вопросах, место — по базовому набору. Память — индекс метода (для embeddings вместе с моделью, для pg_trgm — таблица в PostgreSQL).",
+      `<div class="chart" id="c-methods"></div>` +
       table([
         { label: "Место", key: "rank", n: 1 }, { label: "Метод", key: "name" }, { label: "Ответов", key: "questions", n: 1 },
         { label: "Найдено, %", key: "found_pct", n: 1, fmt: v => num(v) }, { label: "Ср. сходство", key: "avg_score", n: 1, fmt: v => num(v, 2) },
-        { label: "👍", key: "likes", n: 1 }, { label: "👎", key: "dislikes", n: 1 }, { label: "Довольны, %", key: "satisfaction_pct", n: 1, fmt: v => num(v) },
+        { label: "MRR база", key: "mrr_base", n: 1, fmt: v => num(v, 3) }, { label: "MRR формулировки", key: "mrr_paraphrases", n: 1, fmt: v => num(v, 3) },
         { label: "Поиск, мс", key: "avg_latency_ms", n: 1, fmt: v => num(v, 1) }, { label: "Память, МБ", key: "memory_mb", n: 1, fmt: v => num(v, 2) },
         { label: "Подготовка, с", key: "fit_seconds", n: 1, fmt: v => num(v, 2) }], m))}
     <div class="grid2">
@@ -383,23 +380,9 @@ async function pageStats(view) {
     </div>
     <div id="daily"></div>`;
 
-  if (ev.length) {
-    $("#ev").outerHTML = card("Оценка на тестовых вопросах",
-      `${ev[0].test_queries} перефразированных вопросов из FAQ (data/test_queries.csv). P@1 — правильный ответ первым, P@3 — в топ-3, MRR — средняя обратная позиция правильного ответа. Варианты со стеммингом и лемматизацией — отдельные строки.`,
-      `${legend([{ label: "P@1", color: "--s1" }, { label: "P@3", color: "--s2" }, { label: "MRR", color: "--s3" }])}<div class="chart" id="c-ev"></div>` +
-      table([
-        { label: "Место", key: "place", n: 1 }, { label: "Метод", key: "method" }, { label: "Обработка", key: "preprocessing", fmt: v => PREP[v] || v },
-        { label: "P@1", key: "p_at_1", n: 1, fmt: v => num(v, 3) }, { label: "P@3", key: "p_at_3", n: 1, fmt: v => num(v, 3) }, { label: "MRR", key: "mrr", n: 1, fmt: v => num(v, 3) },
-        { label: "Поиск, мс", key: "time_ms", n: 1, fmt: v => num(v, 2) }, { label: "Память, МБ", key: "memory_mb", n: 1, fmt: v => num(v, 2) }], ev));
-    hbarGroup($("#c-ev"), {
-      cats: ev.map(r => ({ label: r.method, values: r })), max: 1, ticks: [0, .25, .5, .75, 1], fmt: v => num(v, 2),
-      series: [{ key: "p_at_1", label: "P@1", color: "--s1" }, { key: "p_at_3", label: "P@3", color: "--s2" }, { key: "mrr", label: "MRR", color: "--s3" }] });
-  } else {
-    $("#ev").outerHTML = card("Оценка на тестовых вопросах", "", `<div class="empty">Оценка ещё не выполнена: python init_project.py</div>`);
-  }
   columns($("#c-methods"), {
     cats: m.map(r => ({ label: r.name, values: r })), max: 100, ticks: [0, 25, 50, 75, 100], fmt: v => `${num(v)}%`,
-    series: [{ key: "found_pct", label: "ответ найден", color: "--s1" }, { key: "satisfaction_pct", label: "довольны", color: "--s2" }] });
+    series: [{ key: "found_pct", label: "ответ найден", color: "--s1" }] });
   dotLog($("#c-lat"), { cats: m.map(r => ({ label: r.name, value: r.avg_latency_ms })), unit: "мс" });
   dotLog($("#c-mem"), { cats: m.map(r => ({ label: r.name, value: r.memory_mb })), unit: "МБ" });
 
@@ -414,10 +397,66 @@ async function pageStats(view) {
       series: modes.map((k, i) => ({ key: k, label: MODES[k], color: SERIES[i] })) });
   } else $("#daily").remove();
 }
+
+const TEST_SETS = { base: { title: "Базовые перефразы", hint: "data/test_queries.csv: по одной перефразе на 40 разных вопросов FAQ." },
+                    paraphrases: { title: "Разные формулировки", hint: "data/paraphrases.csv: 10 вопросов, по каждому формулировки разных типов — сленг, синонимы, опечатки, транслит, английский, зеркальные." } };
+const METRICS = { p_at_1: { label: "P@1", hue: "--s1" }, mrr: { label: "MRR", hue: "--s1" }, confident_wrong: { label: "Уверенные ошибки", hue: "--s2" } };
+const evalState = { set: "paraphrases", by: "type", metric: "p_at_1" };
+const shortMethod = (title, prep) => title.replace(" · лемматизация", "").replace(" (baseline)", "").replace(" (PostgreSQL)", "").replace(" (MiniLM)", "") + (prep === "lemma" ? " · лемм." : "");
+
+async function pageEval(view) {
+  const ev = await load("/api/evaluation");
+  if (!ev.length) { view.innerHTML = card("Оценка на тестовых вопросах", "", `<div class="empty">Оценка ещё не выполнена: python -m analytics.evaluation</div>`); return; }
+  const sets = Object.keys(TEST_SETS).filter(k => ev.some(r => r.test_set === k));
+  if (!sets.includes(evalState.set)) evalState.set = sets[0];
+  const rows = ev.filter(r => r.test_set === evalState.set);
+  const seg = (name, options, current) => `<div class="seg" data-eval="${name}">${options.map(([k, l]) => `<button type="button" data-v="${k}" aria-pressed="${k === current}">${esc(l)}</button>`).join("")}</div>`;
+  view.innerHTML = `
+    ${card("Оценка на тестовых вопросах", "У каждого тестового вопроса известен правильный ответ. P@1 — правильный ответ первым, P@3 — в топ-3, MRR — средняя обратная позиция правильного ответа (1, ½, ⅓ или 0). Варианты со стеммингом и лемматизацией — отдельные строки.", `
+      ${seg("set", sets.map(k => [k, TEST_SETS[k].title]), evalState.set)}
+      <p class="hint">${esc(TEST_SETS[evalState.set].hint)} Вопросов: ${rows[0].test_queries}.</p>
+      ${legend([{ label: "P@1", color: "--s1" }, { label: "P@3", color: "--s2" }, { label: "MRR", color: "--s3" }])}<div class="chart" id="c-ev"></div>
+      ${table([
+        { label: "Место", key: "place", n: 1 }, { label: "Метод", key: "method" }, { label: "Обработка", key: "preprocessing", fmt: v => PREP[v] || v },
+        { label: "P@1", key: "p_at_1", n: 1, fmt: v => num(v, 3) }, { label: "P@3", key: "p_at_3", n: 1, fmt: v => num(v, 3) }, { label: "MRR", key: "mrr", n: 1, fmt: v => num(v, 3) },
+        { label: "Поиск, мс", key: "time_ms", n: 1, fmt: v => num(v, 2) }, { label: "Память, МБ", key: "memory_mb", n: 1, fmt: v => num(v, 2) }], rows)}`)}
+    <div id="breakdown"></div>`;
+  hbarGroup($("#c-ev"), {
+    cats: rows.map(r => ({ label: shortMethod(r.method, r.preprocessing), values: r })), max: 1, ticks: [0, .25, .5, .75, 1], fmt: v => num(v, 2),
+    series: [{ key: "p_at_1", label: "P@1", color: "--s1" }, { key: "p_at_3", label: "P@3", color: "--s2" }, { key: "mrr", label: "MRR", color: "--s3" }] });
+  view.querySelector('[data-eval="set"]').addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    evalState.set = b.dataset.v; pageEval(view);
+  });
+
+  if (evalState.set !== "paraphrases") { $("#breakdown").remove(); return; }
+  const br = await load(`/api/evaluation/breakdown?by=${evalState.by}&test_set=paraphrases`);
+  const methods = [...new Map(br.map(r => [`${r.method}|${r.preprocessing}`, shortMethod(r.method, r.preprocessing)])).entries()];
+  const buckets = [...new Set(br.map(r => r.bucket))];
+  const cell = Object.fromEntries(br.map(r => [`${r.bucket}#${r.method}|${r.preprocessing}`, r]));
+  const metric = METRICS[evalState.metric];
+  const shade = v => v == null ? "" : `background:color-mix(in srgb, var(${metric.hue}) ${Math.round(v * 70)}%, var(--surface))`;
+  const bestOf = b => { const vals = methods.map(([k]) => cell[`${b}#${k}`]?.[evalState.metric] ?? null).filter(v => v != null); return evalState.metric === "confident_wrong" ? Math.min(...vals) : Math.max(...vals); };
+  const heat = `<div class="tbl"><table class="heat"><thead><tr><th>${evalState.by === "type" ? "Тип формулировки" : "Тема"}</th><th class="n">Запросов</th>${methods.map(([, l]) => `<th class="n">${esc(l)}</th>`).join("")}</tr></thead><tbody>
+    ${buckets.map(b => { const best = bestOf(b); return `<tr><td>${esc(b)}</td><td class="n">${cell[`${b}#${methods[0][0]}`]?.queries ?? ""}</td>${methods.map(([k, l]) => {
+      const r = cell[`${b}#${k}`], v = r?.[evalState.metric];
+      const tipHtml = r ? tipRows(`${b} · ${l}`, [{ label: "P@1", value: num(r.p_at_1, 2) }, { label: "P@3", value: num(r.p_at_3, 2) }, { label: "MRR", value: num(r.mrr, 3) }, { label: "уверенные ошибки", value: pct(100 * r.confident_wrong) }]) : "";
+      return `<td class="n" style="${shade(v)}${v === best ? ";font-weight:700" : ""}" data-tip="${esc(tipHtml)}">${v == null ? "—" : evalState.metric === "confident_wrong" ? pct(100 * v) : num(v, 2)}</td>`; }).join("")}</tr>`; }).join("")}
+    </tbody></table></div>`;
+  $("#breakdown").outerHTML = card("Где методы ошибаются",
+    "Набор «Разные формулировки» в разрезе типов формулировок или тем. Чем темнее ячейка, тем больше значение; жирным — лучший метод в строке. Уверенная ошибка — неверный ответ со сходством выше порога метода: бот выдал бы его как найденный.",
+    `<div class="filters">${seg("by", [["type", "по типу формулировки"], ["topic", "по теме"]], evalState.by)}${seg("metric", Object.entries(METRICS).map(([k, m]) => [k, m.label]), evalState.metric)}</div>${heat}
+     <p class="hint">Какие именно запросы не решены и что выдали методы — запрос <a href="#sql" data-sql="test_errors">test_errors</a> во вкладке SQL.</p>`);
+  view.querySelectorAll('[data-eval="by"], [data-eval="metric"]').forEach(segEl => segEl.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    evalState[segEl.dataset.eval] = b.dataset.v; pageEval(view);
+  }));
+  view.querySelector("[data-sql]")?.addEventListener("click", e => { sqlCurrent = e.target.dataset.sql; });
+}
 function niceStep(max) { const raw = Math.max(1, max) / 4, p = 10 ** Math.floor(Math.log10(raw)); return [1, 2, 5, 10].map(m => m * p).find(s => s >= raw); }
 function range(a, b, step) { const out = []; for (let v = a; v <= b + 1e-9; v += step) out.push(v); return out; }
 
-const reqState = { modes: new Set(["compare", "single"]), method: "", status: "all", fb: "all", text: "" };
+const reqState = { modes: new Set(["compare", "single"]), method: "", status: "all", text: "" };
 async function pageRequests(view) {
   const log = await load("/api/requests?limit=5000");
   if (!log.length) { view.innerHTML = card("", "", `<div class="empty">Пока нет вопросов.</div>`); return; }
@@ -427,7 +466,6 @@ async function pageRequests(view) {
       <div class="field">Режим<div class="checks">${Object.entries(MODES).map(([k, l]) => `<label><input type="checkbox" value="${k}" ${reqState.modes.has(k) ? "checked" : ""} data-f="mode">${l}</label>`).join("")}</div></div>
       <label>Метод<select id="f-method"><option value="">все</option>${methods.map(x => `<option ${x === reqState.method ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></label>
       <div class="field">Результат<div class="seg" data-seg="status">${[["all", "все"], ["found", "найден"], ["missing", "не найден"]].map(([k, l]) => `<button type="button" data-v="${k}" aria-pressed="${reqState.status === k}">${l}</button>`).join("")}</div></div>
-      <div class="field">Отзыв<div class="seg" data-seg="fb">${[["all", "все"], ["👍", "👍"], ["👎", "👎"], ["", "без отзыва"]].map(([k, l]) => `<button type="button" data-v="${k}" aria-pressed="${reqState.fb === k}">${l}</button>`).join("")}</div></div>
       <label style="flex:1 1 200px">Поиск по тексту вопроса<input type="text" id="f-text" value="${esc(reqState.text)}" placeholder="например: общежитие"></label>
     </div>
     <div class="count" id="r-count"></div>
@@ -435,20 +473,20 @@ async function pageRequests(view) {
   const render = () => {
     const q = reqState.text.toLowerCase();
     const rows = log.filter(r => (!reqState.modes.size || reqState.modes.has(r.mode)) && (!reqState.method || r.method === reqState.method)
-      && (reqState.status === "all" || r.found === (reqState.status === "found")) && (reqState.fb === "all" || r.feedback === reqState.fb)
+      && (reqState.status === "all" || r.found === (reqState.status === "found"))
       && (!q || r.user_query.toLowerCase().includes(q)));
     $("#r-count").textContent = `Записей: ${rows.length}${rows.length > 500 ? " (показаны первые 500)" : ""}`;
     $("#r-table").innerHTML = table([
       { label: "Время", key: "asked_at", fmt: dt }, { label: "Вопрос", key: "user_query" }, { label: "Режим", key: "mode", fmt: v => MODES[v] || v },
       { label: "Метод", key: "method" }, { label: "Найденный вопрос FAQ", html: r => r.found ? esc(r.matched_question) : `<span class="pill mid">не найден</span> <span style="color:var(--muted)">${esc(r.matched_question || "")}</span>` },
-      { label: "Сходство", key: "score", n: 1, fmt: v => num(v, 3) }, { label: "Отзыв", html: r => fbPill(r.feedback) }],
+      { label: "Сходство", key: "score", n: 1, fmt: v => num(v, 3) }],
       rows.slice(0, 500), { cls: "scroll clickable", rowAttr: (r, i) => `data-i="${i}"` });
     $("#r-table tbody")?.addEventListener("click", e => {
       const tr = e.target.closest("tr[data-i]"); if (!tr) return;
       if (tr.nextElementSibling?.classList.contains("answer")) { tr.nextElementSibling.remove(); tr.classList.remove("open"); return; }
       const r = rows[+tr.dataset.i];
       tr.classList.add("open");
-      tr.insertAdjacentHTML("afterend", `<tr class="answer"><td colspan="7">${esc(r.matched_answer || "Ответа нет")}</td></tr>`);
+      tr.insertAdjacentHTML("afterend", `<tr class="answer"><td colspan="6">${esc(r.matched_answer || "Ответа нет")}</td></tr>`);
     });
   };
   view.querySelectorAll('[data-f="mode"]').forEach(cb => cb.addEventListener("change", () => { cb.checked ? reqState.modes.add(cb.value) : reqState.modes.delete(cb.value); render(); }));
@@ -475,7 +513,7 @@ async function pageMatches(view) {
     <div id="dist"></div>
     ${card("Чаще всего выдаваемые ответы", "", table([
       { label: "Вопрос FAQ", key: "question" }, { label: "Раз", key: "times", n: 1 }, { label: "Ср. сходство", key: "avg_score", n: 1, fmt: v => num(v, 2) },
-      { label: "👍", key: "likes", n: 1 }, { label: "👎", key: "dislikes", n: 1 }], top))}`;
+      { label: "Запросов", key: "requests", n: 1 }], top))}`;
 
   $("#s-form").addEventListener("submit", async e => {
     e.preventDefault();
@@ -487,12 +525,6 @@ async function pageMatches(view) {
       const res = await api("/api/ask", { method: "POST", body: JSON.stringify({ text: q, k: 3, save }) });
       out.innerHTML = renderAsk(res);
       if (save) cache.clear();
-      out.querySelectorAll("[data-fb]").forEach(b => b.addEventListener("click", async () => {
-        try {
-          await api("/api/feedback", { method: "POST", body: JSON.stringify({ request_id: res.request_id, faq_id: res.answer.faq_id, helpful: b.dataset.fb === "1" }) });
-          b.parentElement.innerHTML = `<span class="count">Отзыв сохранён</span>`; cache.clear();
-        } catch (err) { b.parentElement.innerHTML = `<span class="err">${esc(err.message)}</span>`; }
-      }));
     } catch (err) { out.innerHTML = `<div class="err">${esc(err.message)}</div>`; }
     btn.disabled = false;
   });
@@ -507,7 +539,7 @@ async function pageMatches(view) {
     $("#comp").outerHTML = card("Ответы всех методов на каждый запрос",
       `Режим сравнения в боте. Пусто — метод не нашёл ответ выше порога. ${agreeable.length ? `Все нашедшие методы сошлись в ответе в ${pct(100 * agreed / agreeable.length)} запросов (из ${agreeable.length} с найденным ответом).` : ""}`,
       table([{ label: "Время", key: "asked_at", fmt: dt }, { label: "Вопрос", key: "query" },
-        ...methods.map(name => ({ label: esc(name), html: r => { const x = r.m[name]; if (!x) return ""; return x.matched_question ? `${esc(x.matched_question)}<div class="count">${num(x.score, 3)} · ${num(x.latency_ms, 1)} мс ${fbPill(x.feedback)}</div>` : `<span class="pill mid">не найдено</span><div class="count">${num(x.score, 3)}</div>`; } }))],
+        ...methods.map(name => ({ label: esc(name), html: r => { const x = r.m[name]; if (!x) return ""; return x.matched_question ? `${esc(x.matched_question)}<div class="count">${num(x.score, 3)} · ${num(x.latency_ms, 1)} мс</div>` : `<span class="pill mid">не найдено</span><div class="count">${num(x.score, 3)}</div>`; } }))],
         reqs, { cls: "scroll" }));
   } else $("#comp").remove();
 
@@ -526,7 +558,6 @@ function renderAsk(res) {
     ? `<div style="display:grid;gap:6px;border-left:3px solid var(--accent);padding-left:12px">
          <div class="count">Итоговый ответ · за него ${res.answer.votes} из ${a.methods_found} нашедших методов (${res.answer.methods.map(esc).join(", ")})</div>
          <b>${esc(res.answer.question)}</b><div style="white-space:pre-wrap;color:var(--ink-2)">${esc(res.answer.answer)}</div>
-         ${res.request_id ? `<div class="searchrow"><button class="btn" type="button" data-fb="1">👍 подошёл</button><button class="btn" type="button" data-fb="0">👎 не подошёл</button></div>` : ""}
        </div>`
     : `<div class="empty">Ни один метод не нашёл ответ выше своего порога</div>`;
   const steps = [["Нормализация", esc(t.normalized)], ["Слова", chips(t.tokens)], ["Убраны стоп-слова", chips(t.stopwords)],
@@ -549,12 +580,10 @@ function renderAsk(res) {
 async function pageSuggestions(view) {
   const sug = await load("/api/suggestions");
   if (!sug.length) { view.innerHTML = card("Предложения для FAQ", "", `<div class="empty">Необработанных вопросов нет.</div>`); return; }
-  const REASON = { not_found: "не найден", bad_answer: "ответ не подошёл" };
-  view.innerHTML = card("Предложения для FAQ", "Вопросы, на которые бот не нашёл ответа или все ответы получили 👎. Отметьте вопросы, ответ на которые уже добавлен в FAQ.", `
+  view.innerHTML = card("Предложения для FAQ", "Вопросы, на которые ни один метод не нашёл ответа выше порога. Отметьте вопросы, ответ на которые уже добавлен в FAQ.", `
     ${table([
       { label: "", html: (r, i) => `<input type="checkbox" aria-label="Выбрать" data-sug>` },
       { label: "Вопрос", key: "question" }, { label: "Раз", key: "times", n: 1 },
-      { label: "Причина", html: r => String(r.reasons || "").split(", ").map(x => `<span class="pill ${x === "not_found" ? "mid" : "no"}">${esc(REASON[x] || x)}</span>`).join(" ") },
       { label: "Что предложил бот", key: "best_candidate" }, { label: "Сходство", key: "best_score", n: 1, fmt: v => num(v, 2) },
       { label: "Последний раз", key: "last_asked", fmt: dt }], sug, { cls: "scroll", rowAttr: (r, i) => `data-i="${i}"` })}
     <div class="searchrow" style="align-items:center">
@@ -610,8 +639,36 @@ async function pageSql(view) {
   run();
 }
 
+// ---------- Telegram ----------
+// Внутри Telegram (/app) страница открывается с #tgWebAppData=… в адресе: подключаем скрипт Telegram,
+// берём цвета темы пользователя и разворачиваем мини-приложение на весь экран. В браузере ничего не меняется.
+const IN_TELEGRAM = /tgWebApp(Data|Platform)=/.test(location.hash);
+function applyTelegramTheme(tg) {
+  const t = tg.themeParams || {}, root = document.documentElement;
+  root.setAttribute("data-theme", tg.colorScheme === "dark" ? "dark" : "light");   // цвета серий — из своей палитры темы
+  const map = { "--bg": t.secondary_bg_color, "--surface": t.section_bg_color || t.bg_color, "--ink": t.text_color,
+                "--ink-2": t.subtitle_text_color || t.hint_color, "--muted": t.hint_color, "--accent": t.button_color || t.link_color,
+                "--line": t.section_separator_color };
+  for (const [name, value] of Object.entries(map)) value ? root.style.setProperty(name, value) : root.style.removeProperty(name);
+  if (t.secondary_bg_color) tg.setBackgroundColor?.(t.secondary_bg_color);
+  if (t.section_bg_color || t.bg_color) tg.setHeaderColor?.(t.section_bg_color || t.bg_color);
+  charts.forEach(c => c.el.isConnected && c.draw(c.el, c.el.clientWidth));
+}
+if (IN_TELEGRAM) {
+  const script = Object.assign(document.createElement("script"), { src: "https://telegram.org/js/telegram-web-app.js" });
+  script.onload = () => {
+    const tg = window.Telegram?.WebApp;
+    if (!tg) return;
+    tg.ready();
+    tg.expand();
+    applyTelegramTheme(tg);
+    tg.onEvent("themeChanged", () => applyTelegramTheme(tg));
+  };
+  document.head.append(script);
+}
+
 // ---------- router ----------
-const PAGES = { stats: pageStats, requests: pageRequests, matches: pageMatches, suggestions: pageSuggestions, sql: pageSql };
+const PAGES = { stats: pageStats, eval: pageEval, requests: pageRequests, matches: pageMatches, suggestions: pageSuggestions, sql: pageSql };
 function askKey(view, problem) {
   store.set("");
   view.innerHTML = card("Нужен ключ доступа", "Ключ — значение DASHBOARD_KEY из файла .env проекта. Его же показывает ./run.sh при запуске, а из Telegram дашборд открывается с ключом сам (команда /app). Ключ запомнится в этом браузере.", `

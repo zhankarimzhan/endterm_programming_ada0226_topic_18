@@ -1,7 +1,9 @@
-"""Оценка методов на тестовых вопросах (data/test_queries.csv): Precision@1, Precision@3, MRR, время, память;
-сравнение стемминга и лемматизации. Результаты -> runs / predictions.
-Тестовые вопросы также записываются как запросы в режиме 'test' с 👍 правильному ответу —
-чтобы попасть в статистику бота, дашборд и SQL-аналитику.
+"""Оценка методов на тестовых вопросах: Precision@1, Precision@3, MRR, время, память; сравнение стемминга и лемматизации.
+Два набора (TEST_SETS):
+  base         data/test_queries.csv — 40 перефраз разных вопросов FAQ;
+  paraphrases  data/paraphrases.csv  — 10 вопросов, по каждому формулировки разных типов (сленг, синоним, опечатка,
+               транслит, английский, зеркальные) — метрики по типам формулировок и темам (представление v_test_hits).
+Результаты -> test_queries, test_acceptable, runs (по прогону на метод и набор), predictions.
 Запускается из init_project.py (первичный запуск проекта) или отдельно: python -m analytics.evaluation [--force]."""
 import argparse
 import logging
@@ -12,48 +14,71 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from methods import METHOD_CLASSES, SimilarityMethod
-from search import compare_all, load_faq, log_comparison, register_methods, save_feedback, timed_search
+from search import load_faq, register_methods, timed_search
 
-TEST_PATH = Path(__file__).resolve().parents[1] / "data" / "test_queries.csv"
+DATA_DIR = Path(__file__).resolve().parents[1] / "data"
+TEST_SETS = {"base": DATA_DIR / "test_queries.csv", "paraphrases": DATA_DIR / "paraphrases.csv"}
 K = 3                                              # глубина поиска: Precision@1, Precision@3, MRR по топ-3
 LEMMA_VARIANTS = ("rule_based", "bow", "tfidf")    # методы с предобработкой — сравниваем стемминг и лемматизацию
 
 RUN_SQL = text("""
-    INSERT INTO runs (method_id, p_at_1, p_at_3, mrr, time_ms, memory_mb)
-    SELECT method_id, :p1, :p3, :mrr, :ms, :mem FROM methods WHERE name = :name AND preprocessing = :prep
+    INSERT INTO runs (method_id, test_set, p_at_1, p_at_3, mrr, time_ms, memory_mb)
+    SELECT method_id, :test_set, :p1, :p3, :mrr, :ms, :mem FROM methods WHERE name = :name AND preprocessing = :prep
     RETURNING run_id
 """)
 PREDICTION_SQL = text("""
     INSERT INTO predictions (run_id, query_id, rank, faq_id, score) VALUES (:run_id, :query_id, :rank, :faq_id, :score)
 """)
+QUERY_SQL = text("""
+    INSERT INTO test_queries (text, true_faq_id, test_set, query_type, topic)
+    VALUES (:q, :fid, :test_set, :type, :topic) RETURNING query_id
+""")
+ACCEPTABLE_SQL = text("INSERT INTO test_acceptable (query_id, faq_id) VALUES (:query_id, :faq_id)")
 
 
 def norm(s: str) -> str:
     return " ".join(str(s).split())
 
 
-def load_test_set(engine: Engine, path: Path = TEST_PATH) -> pd.DataFrame:
-    """Тестовые вопросы с правильным faq_id и множеством допустимых ответов
-    (вопросы FAQ с тем же текстом ответа — дубликаты тоже считаются верными)."""
-    tests = pd.read_csv(path)
+def load_test_set(engine: Engine, test_set: str) -> pd.DataFrame:
+    """Тестовые вопросы набора: query, true_faq_id, acceptable (множество верных faq_id), query_type, topic.
+    base: колонки query, true_question (вопрос FAQ ищется по тексту);
+    paraphrases: query, true_faq_id, also_correct (через «;»), type, group.
+    Верными считаются также вопросы FAQ с тем же текстом ответа (дубликаты)."""
+    path = TEST_SETS[test_set]
+    tests = pd.read_csv(path, dtype=str).fillna("")
     faq = load_faq(engine)
-    by_question = {norm(q): int(i) for i, q in zip(faq["faq_id"], faq["question"])}
-    missing = [q for q in tests["true_question"] if norm(q) not in by_question]
-    if missing:
-        raise ValueError(f"Вопросы из {path.name} не найдены в FAQ: {missing}")
     answer_of = {int(i): norm(a) for i, a in zip(faq["faq_id"], faq["answer"])}
-    tests["true_faq_id"] = tests["true_question"].map(lambda q: by_question[norm(q)])
-    tests["acceptable"] = tests["true_faq_id"].map(
-        lambda fid: {i for i, a in answer_of.items() if a == answer_of[fid]})
-    return tests
+    if "true_question" in tests:
+        by_question = {norm(q): int(i) for i, q in zip(faq["faq_id"], faq["question"])}
+        missing = [q for q in tests["true_question"] if norm(q) not in by_question]
+        if missing:
+            raise ValueError(f"Вопросы из {path.name} не найдены в FAQ: {missing}")
+        tests["true_faq_id"] = tests["true_question"].map(lambda q: by_question[norm(q)])
+    tests["true_faq_id"] = tests["true_faq_id"].astype(int)
+    also = tests.get("also_correct", pd.Series("", index=tests.index))
+    tests["acceptable"] = [
+        {i for i, a in answer_of.items() if a in {answer_of[f] for f in ids}}
+        for ids in ({fid} | {int(x) for x in extra.split(";") if x} for fid, extra in zip(tests["true_faq_id"], also))]
+    unknown = {f for ids in tests["acceptable"] for f in ids} - set(answer_of) | set(tests["true_faq_id"]) - set(answer_of)
+    if unknown:
+        raise ValueError(f"В {path.name} есть faq_id, которых нет в FAQ: {sorted(unknown)}")
+    tests["query_type"] = tests.get("type", pd.Series("", index=tests.index))
+    tests["topic"] = tests.get("group", pd.Series("", index=tests.index))
+    tests["test_set"] = test_set
+    return tests[["query", "true_faq_id", "acceptable", "query_type", "topic", "test_set"]]
 
 
 def store_test_queries(engine: Engine, tests: pd.DataFrame) -> pd.DataFrame:
-    """Записывает вопросы в test_queries (предыдущий набор и его оценки удаляются)."""
+    """Записывает вопросы всех наборов и их допустимые ответы (предыдущие наборы и оценки удаляются)."""
     with engine.begin() as conn:
-        conn.execute(text("TRUNCATE predictions, runs, test_queries RESTART IDENTITY"))
-        ids = [conn.execute(text("INSERT INTO test_queries (text, true_faq_id) VALUES (:q, :fid) RETURNING query_id"),
-                            {"q": r.query, "fid": int(r.true_faq_id)}).scalar() for r in tests.itertuples()]
+        conn.execute(text("TRUNCATE predictions, runs, test_acceptable, test_queries RESTART IDENTITY"))
+        ids = []
+        for r in tests.itertuples():
+            query_id = conn.execute(QUERY_SQL, {"q": r.query, "fid": int(r.true_faq_id), "test_set": r.test_set,
+                                                "type": r.query_type or None, "topic": r.topic or None}).scalar()
+            conn.execute(ACCEPTABLE_SQL, [{"query_id": query_id, "faq_id": f} for f in sorted(r.acceptable)])
+            ids.append(query_id)
     return tests.assign(query_id=ids)
 
 
@@ -91,7 +116,8 @@ def evaluate_method(method: SimilarityMethod, tests: pd.DataFrame) -> tuple[dict
         predictions += [{"query_id": int(t.query_id), "rank": rank, "faq_id": r["faq_id"], "score": r["score"]}
                         for rank, r in enumerate(results, start=1)]
     n = len(tests)
-    metrics = {"method": method.title, "name": method.name, "preprocessing": method.preprocessing,
+    metrics = {"test_set": tests["test_set"].iat[0], "method": method.title, "name": method.name,
+               "preprocessing": method.preprocessing,
                "p_at_1": hits1 / n, "p_at_3": hits3 / n, "mrr": rr / n,
                "time_ms": total_ms / n, "memory_mb": method.memory}
     return metrics, predictions
@@ -99,29 +125,17 @@ def evaluate_method(method: SimilarityMethod, tests: pd.DataFrame) -> tuple[dict
 
 def save_run(engine: Engine, method: SimilarityMethod, metrics: dict, predictions: list[dict]) -> None:
     with engine.begin() as conn:
-        run_id = conn.execute(RUN_SQL, {"p1": metrics["p_at_1"], "p3": metrics["p_at_3"], "mrr": metrics["mrr"],
+        run_id = conn.execute(RUN_SQL, {"test_set": metrics["test_set"], "p1": metrics["p_at_1"], "p3": metrics["p_at_3"], "mrr": metrics["mrr"],
                                         "ms": metrics["time_ms"], "mem": metrics["memory_mb"],
                                         "name": method.name, "prep": method.preprocessing}).scalar()
         conn.execute(PREDICTION_SQL, [dict(p, run_id=run_id) for p in predictions])
 
 
-def push_to_bot_stats(engine: Engine, methods: dict[str, SimilarityMethod], tests: pd.DataFrame) -> int:
-    """Отправляет тестовые вопросы «в бота»: запрос в режиме 'test' с ответами всех методов
-    и 👍 правильному ответу (и его дубликатам, если метод вернул дубликат)."""
-    with engine.begin() as conn:
-        conn.execute(text("DELETE FROM requests WHERE mode = 'test'"))
-    for t in tests.itertuples():
-        rows = compare_all(methods, t.query, K)
-        request_id = log_comparison(engine, t.query, rows, mode="test")
-        approved = {t.true_faq_id} | {r["best"]["faq_id"] for r in rows if r["best"] and r["best"]["faq_id"] in t.acceptable}
-        for faq_id in approved:
-            save_feedback(engine, request_id, int(faq_id), True)
-    return len(tests)
-
-
 def evaluation_done(engine: Engine) -> bool:
+    """Есть прогоны по всем наборам из TEST_SETS (новый набор — повод пересчитать)."""
     with engine.connect() as conn:
-        return bool(conn.execute(text("SELECT EXISTS (SELECT 1 FROM runs)")).scalar())
+        done = set(conn.execute(text("SELECT DISTINCT test_set FROM runs")).scalars())
+    return set(TEST_SETS) <= done
 
 
 def run_evaluation(engine: Engine, methods: dict[str, SimilarityMethod], force: bool = False) -> pd.DataFrame | None:
@@ -129,19 +143,19 @@ def run_evaluation(engine: Engine, methods: dict[str, SimilarityMethod], force: 
     if evaluation_done(engine) and not force:
         print("Оценка на тестовых вопросах уже выполнена (повторить: --force)")
         return None
-    tests = store_test_queries(engine, load_test_set(engine))
-    print(f"Тестовых вопросов: {len(tests)}")
+    tests = store_test_queries(engine, pd.concat([load_test_set(engine, name) for name in TEST_SETS], ignore_index=True))
+    print("Тестовых вопросов: " + ", ".join(f"{name} — {n}" for name, n in tests["test_set"].value_counts().items()))
     rows = []
     for m in list(methods.values()) + list(build_lemma_variants(engine, methods).values()):
-        metrics, predictions = evaluate_method(m, tests)
-        save_run(engine, m, metrics, predictions)
-        rows.append(metrics)
-    print(f"В статистику бота записано тестовых запросов: {push_to_bot_stats(engine, methods, tests)}")
-    return pd.DataFrame(rows).sort_values(["mrr", "time_ms"], ascending=[False, True])
+        for _, part in tests.groupby("test_set", sort=False):
+            metrics, predictions = evaluate_method(m, part)
+            save_run(engine, m, metrics, predictions)
+            rows.append(metrics)
+    return pd.DataFrame(rows).sort_values(["test_set", "mrr", "time_ms"], ascending=[True, False, True])
 
 
 def format_results(df: pd.DataFrame) -> str:
-    show = df[["method", "preprocessing", "p_at_1", "p_at_3", "mrr", "time_ms", "memory_mb"]].copy()
+    show = df[["test_set", "method", "preprocessing", "p_at_1", "p_at_3", "mrr", "time_ms", "memory_mb"]].copy()
     show[["p_at_1", "p_at_3", "mrr"]] = show[["p_at_1", "p_at_3", "mrr"]].round(3)
     show[["time_ms", "memory_mb"]] = show[["time_ms", "memory_mb"]].round(2)
     return show.to_string(index=False)

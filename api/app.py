@@ -1,7 +1,7 @@
 """API статистики бота: те же данные, что в дашборде Streamlit, в виде JSON.
 Страница web/dashboard.html открывается на / и читает эти эндпоинты.
-Вопросы можно задавать через API: POST /api/ask — ответ всех методов, итоговый ответ и разбор текста;
-POST /api/feedback — оценка ответа. Документация: /api/docs.
+Вопросы можно задавать через API: POST /api/ask — ответ всех методов, итоговый ответ и разбор текста.
+Документация: /api/docs.
 Доступ — ключ DASHBOARD_KEY из .env: параметр ?key=... или заголовок X-Dashboard-Key.
 Запуск: uvicorn api.app:app --host 0.0.0.0 --port 8000"""
 import datetime
@@ -15,16 +15,15 @@ import pandas as pd
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
-from sqlalchemy.exc import DataError, IntegrityError
 
 from analytics.queries_runner import load_queries, run_named
-from analytics.stats import (get_chat_log, get_comparison, get_daily, get_evaluation, get_method_stats, get_suggestions,
-                             get_top_matched, get_totals, mark_resolved)
+from analytics.stats import (BREAKDOWNS, get_chat_log, get_comparison, get_daily, get_evaluation,
+                             get_evaluation_breakdown, get_method_stats, get_suggestions, get_top_matched, get_totals,
+                             mark_resolved)
 from db import check_connection, get_engine
 from methods import METHOD_CLASSES
 from preprocessing.explain import explain
 from search.ask import ask as ask_question
-from search.history import save_feedback
 
 DASHBOARD_PATH = Path(__file__).resolve().parents[1] / "web" / "dashboard.html"
 
@@ -95,14 +94,21 @@ def totals() -> Response:
 
 @app.get("/api/methods", dependencies=[api])
 def method_stats() -> Response:
-    """По методам: доля найденных, сходство, отзывы, время, память, место."""
+    """По методам: доля найденных, сходство, время, память, MRR на тестовых вопросах, место."""
     return as_json(get_method_stats(engine))
 
 
 @app.get("/api/evaluation", dependencies=[api])
 def evaluation() -> Response:
-    """Последний прогон на тестовых вопросах: P@1, P@3, MRR."""
+    """Последний прогон каждого метода на каждом наборе тестовых вопросов: P@1, P@3, MRR."""
     return as_json(get_evaluation(engine))
+
+
+@app.get("/api/evaluation/breakdown", dependencies=[api])
+def evaluation_breakdown(by: str = Query("type", pattern=f"^({'|'.join(BREAKDOWNS)})$"),
+                         test_set: str = Query("paraphrases")) -> Response:
+    """Метрики по типам формулировок (by=type) или темам (by=topic): P@1, P@3, MRR, доля уверенных ошибок."""
+    return as_json(get_evaluation_breakdown(engine, by, test_set))
 
 
 @app.get("/api/daily", dependencies=[api])
@@ -174,7 +180,7 @@ class AskBody(BaseModel):
 def ask(body: AskBody) -> Response:
     """Вопрос → ответы всех методов, итоговый ответ (за который больше методов) и разбор:
     шаги предобработки, сколько методов нашли ответ, насколько они согласны. С save=true вопрос
-    попадает в статистику, а request_id можно передать в /api/feedback."""
+    попадает в статистику."""
     unknown = set(body.methods or []) - set(METHOD_CLASSES)
     if unknown:
         raise HTTPException(status_code=422, detail=f"Неизвестные методы: {', '.join(sorted(unknown))}")
@@ -185,19 +191,3 @@ def ask(body: AskBody) -> Response:
 def analyze(text: str = Query(..., min_length=1, max_length=500)) -> dict:
     """Только разбор текста по шагам предобработки, без поиска."""
     return explain(text)
-
-
-class FeedbackBody(BaseModel):
-    request_id: str
-    faq_id: int
-    helpful: bool
-
-
-@app.post("/api/feedback", dependencies=[api])
-def feedback(body: FeedbackBody) -> dict:
-    """👍 / 👎 на ответ faq_id для запроса из /api/ask (как кнопки в боте)."""
-    try:
-        save_feedback(engine, body.request_id, body.faq_id, body.helpful)
-    except (IntegrityError, DataError):
-        raise HTTPException(status_code=404, detail="Нет такого запроса или вопроса FAQ")
-    return {"saved": True}

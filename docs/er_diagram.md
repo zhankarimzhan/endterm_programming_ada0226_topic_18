@@ -11,10 +11,10 @@ erDiagram
     methods ||--o{ method_runs : "запущен"
     method_runs ||--o{ candidates : "топ-k ответов"
     faq ||--o{ candidates : "найден как"
-    requests ||--o{ feedback : "оценки"
-    faq ||--o{ feedback : "оценён"
     requests ||--o| resolutions : "обработан"
     faq ||--o{ test_queries : "правильный ответ"
+    test_queries ||--o{ test_acceptable : "верные ответы"
+    faq ||--o{ test_acceptable : "засчитывается"
     methods ||--o{ runs : "оценка метода"
     runs ||--o{ predictions : "ответы"
     test_queries ||--o{ predictions : "на вопрос"
@@ -68,12 +68,6 @@ erDiagram
         int faq_id FK
         real score
     }
-    feedback {
-        uuid request_id PK,FK
-        int faq_id PK,FK
-        boolean helpful
-        timestamp created_at
-    }
     resolutions {
         uuid request_id PK,FK
         timestamp resolved_at
@@ -82,10 +76,18 @@ erDiagram
         int query_id PK
         text text
         int true_faq_id FK
+        text test_set "base / paraphrases"
+        text query_type "сленг, синоним…"
+        text topic
+    }
+    test_acceptable {
+        int query_id PK,FK
+        int faq_id PK,FK
     }
     runs {
         int run_id PK
         int method_id FK
+        text test_set
         numeric p_at_1
         numeric p_at_3
         numeric mrr
@@ -110,12 +112,13 @@ erDiagram
 | Обратный индекс | `terms`, `faq_terms` | связь «многие-ко-многим» вопрос ↔ стемм; по ней SQL считает частоты, документную частоту, TF-IDF и находит почти-дубликаты |
 | Методы | `methods` | порог `min_score`, время подготовки и память каждого метода |
 | Работа бота | `requests` → `method_runs` → `candidates` | вопрос хранится один раз; запуск метода (время поиска) отдельно от его топ-k кандидатов — время относится к паре «запрос-метод», а не к каждому кандидату |
-| Оценки | `feedback`, `resolutions` | пользователь оценивает **ответ** (запрос + faq_id), а не метод: засчитан ли метод, вычисляется — так одна оценка автоматически распределяется между всеми методами, вернувшими этот ответ |
-| Оценка на тестах | `test_queries`, `runs`, `predictions` | Precision@k и MRR на размеченных вопросах |
+| Обработка | `resolutions` | вопрос без ответа отмечен как обработанный (ответ добавлен в FAQ) |
+| Оценка на тестах | `test_queries`, `test_acceptable`, `runs`, `predictions` | Precision@k и MRR на размеченных вопросах; у вопроса может быть несколько верных ответов (дубликаты, равноценные), поэтому они в отдельной таблице |
 
 Вычисляемые данные — **представления** (`sql/init/03_views.sql`), а не таблицы:
 
-- `v_method_answers` — ответ каждого метода на каждый запрос: найден ли (оценка ≥ порога метода) и засчитан ли (по отзывам);
-- `v_unanswered` — вопросы без подходящего ответа (`not_found` / `bad_answer`) с ближайшим кандидатом, кроме обработанных.
+- `v_method_answers` — ответ каждого метода на каждый запрос: найден ли (оценка ≥ порога метода);
+- `v_unanswered` — вопросы, на которые ни один метод не нашёл ответа, с ближайшим кандидатом, кроме обработанных;
+- `v_test_hits` — последний прогон каждого метода на каждом тестовом вопросе: место первого верного ответа, уверенная ошибка.
 
 Аналитические запросы к схеме — `queries.sql` (12 запросов: JOIN, self-JOIN, GROUP BY / HAVING, подзапросы EXISTS / NOT EXISTS, CTE, LATERAL, оконные ROW_NUMBER / RANK / DENSE_RANK / SUM OVER / LAG).

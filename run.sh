@@ -1,15 +1,25 @@
 #!/usr/bin/env bash
-# Запуск проекта одной командой: база → зависимости → данные → API с HTML-дашбордом → Telegram-бот.
+# Запуск проекта одной командой: база → зависимости → данные → API с HTML-дашбордом → HTTPS-туннель → Telegram-бот.
 # Повторный запуск безопасен: .env не перезаписывается, данные не дублируются.
-#   ./run.sh            всё
-#   ./run.sh --no-bot   только API и дашборд
+# Дашборд один и тот же в браузере и в Telegram (/app): туннель cloudflared даёт API HTTPS-адрес,
+# который передаётся боту как WEBAPP_URL (адрес быстрого туннеля меняется при каждом запуске, в .env не пишется).
+#   ./run.sh               всё
+#   ./run.sh --no-bot      без бота
+#   ./run.sh --no-tunnel   без туннеля (/app в Telegram работать не будет, если WEBAPP_URL не задан в .env)
 #   API_PORT=8010 ./run.sh
 # Остановка: Ctrl+C (база в Docker продолжает работать; остановить её: docker-compose stop).
 set -euo pipefail
 cd "$(dirname "$0")"
 
 RUN_BOT=1
-[[ "${1:-}" == "--no-bot" ]] && RUN_BOT=0
+RUN_TUNNEL=1
+for arg in "$@"; do
+    case "$arg" in
+        --no-bot)    RUN_BOT=0 ;;
+        --no-tunnel) RUN_TUNNEL=0 ;;
+        *) echo "Неизвестный параметр: $arg (есть --no-bot, --no-tunnel)" >&2; exit 2 ;;
+    esac
+done
 
 say()  { printf '\033[1;36m▸ %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m! %s\033[0m\n' "$*"; }
@@ -86,7 +96,31 @@ say "API и дашборд на порту $PORT"
 .venv/bin/uvicorn api.app:app --host 0.0.0.0 --port "$PORT" --log-level warning &
 PIDS+=($!)
 
-# ---------- 6. бот ----------
+# ---------- 6. HTTPS-туннель для Telegram ----------
+# Telegram открывает мини-приложения только по HTTPS. Если постоянный адрес уже задан в .env — используем его.
+CLOUDFLARED=$(command -v cloudflared || echo "$HOME/.local/bin/cloudflared")
+if [[ $RUN_TUNNEL == 1 && $RUN_BOT == 1 && -z "${WEBAPP_URL:-}" ]]; then
+    if [[ -x "$CLOUDFLARED" ]]; then
+        say "HTTPS-туннель для /app в Telegram"
+        TUNNEL_LOG=$(mktemp)
+        "$CLOUDFLARED" tunnel --no-autoupdate --url "http://localhost:$PORT" >"$TUNNEL_LOG" 2>&1 &
+        PIDS+=($!)
+        for _ in $(seq 1 30); do
+            WEBAPP_URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$TUNNEL_LOG" | head -n 1 || true)
+            [[ -n "$WEBAPP_URL" ]] && break
+            sleep 1
+        done
+        if [[ -n "$WEBAPP_URL" ]]; then
+            export WEBAPP_URL
+        else
+            warn "Туннель не поднялся за 30 с — /app в Telegram работать не будет (лог: $TUNNEL_LOG)"
+        fi
+    else
+        warn "cloudflared не найден — /app в Telegram работать не будет (установка: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)"
+    fi
+fi
+
+# ---------- 7. бот ----------
 if [[ $RUN_BOT == 1 ]]; then
     if [[ -n "${TELEGRAM_BOT_TOKEN:-}" ]]; then
         say "Telegram-бот"
@@ -103,7 +137,7 @@ cat <<EOF
 
   Дашборд:   $URL
   API:       http://localhost:$PORT/api/docs
-  Для /app в Telegram: cloudflared tunnel --url http://localhost:$PORT → адрес в WEBAPP_URL (.env)
+  Telegram:  ${WEBAPP_URL:-не подключён} (команда /app в боте открывает тот же дашборд)
 
   Ctrl+C — остановить
 EOF

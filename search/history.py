@@ -1,5 +1,5 @@
 """Запись истории в нормализованную схему:
-requests (вопрос) -> method_runs (запуск метода, время) -> candidates (топ-k ответов метода); feedback (оценки)."""
+requests (вопрос) -> method_runs (запуск метода, время) -> candidates (топ-k ответов метода)."""
 import uuid
 
 from sqlalchemy import text
@@ -20,13 +20,6 @@ CANDIDATE_SQL = text("""
     VALUES (:rid, :method_id, :rank, :faq_id, :score)
 """)
 
-FEEDBACK_SQL = text("""
-    INSERT INTO feedback (request_id, faq_id, helpful) VALUES (:rid, :faq_id, :helpful)
-    ON CONFLICT (request_id, faq_id) DO UPDATE SET helpful = EXCLUDED.helpful, created_at = now()
-""")
-
-UNANSWERED_SQL = text("SELECT reason FROM v_unanswered WHERE request_id = :rid")
-
 
 def _log_run(conn: Connection, request_id: str, method: SimilarityMethod, results: list[dict], latency_ms: float) -> None:
     """Запуск метода и его топ-k кандидатов."""
@@ -40,7 +33,7 @@ def _log_run(conn: Connection, request_id: str, method: SimilarityMethod, result
 
 
 def log_comparison(engine: Engine, query: str, rows: list[dict], mode: str = "compare") -> str:
-    """Сохраняет запрос и ответы всех методов (режим сравнения или тестовый прогон); возвращает request_id."""
+    """Сохраняет запрос и ответы всех методов (режим сравнения); возвращает request_id."""
     request_id = str(uuid.uuid4())
     with engine.begin() as conn:
         conn.execute(REQUEST_SQL, {"rid": request_id, "q": query, "mode": mode})
@@ -58,16 +51,3 @@ def log_single(engine: Engine, query: str, method: SimilarityMethod, results: li
         if results:
             _log_run(conn, request_id, method, results, latency_ms)
     return request_id
-
-
-def save_feedback(engine: Engine, request_id: str, faq_id: int, helpful: bool) -> None:
-    """Оценка пользователя: подошёл ли ответ faq_id на запрос. Засчитывается методам, вернувшим этот ответ
-    (а при 👍 остальные методы этого запроса считаются ошибившимися) — см. представление v_method_answers."""
-    with engine.begin() as conn:
-        conn.execute(FEEDBACK_SQL, {"rid": request_id, "faq_id": faq_id, "helpful": helpful})
-
-
-def unanswered_reason(engine: Engine, request_id: str) -> str | None:
-    """'not_found' / 'bad_answer', если запрос остался без подходящего ответа (представление v_unanswered)."""
-    with engine.connect() as conn:
-        return conn.execute(UNANSWERED_SQL, {"rid": request_id}).scalar()

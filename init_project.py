@@ -48,7 +48,7 @@ def main() -> None:
     result = run_evaluation(engine, methods, force=args.force)
     if result is not None:
         print(format_results(result))
-    print("Готово. Запуск бота: python bot.py, дашборда: streamlit run dashboard.py")
+    print("Готово. Запуск всего проекта (API, дашборд, туннель для Telegram, бот): ./run.sh")
 
 
 if __name__ == "__main__":

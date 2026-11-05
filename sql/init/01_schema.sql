@@ -50,7 +50,7 @@ CREATE TABLE methods (
 CREATE TABLE requests (
     request_id    UUID PRIMARY KEY,
     query_text    TEXT NOT NULL,
-    mode          TEXT NOT NULL CHECK (mode IN ('compare', 'single', 'test')),   -- все методы / один / тестовый прогон
+    mode          TEXT NOT NULL CHECK (mode IN ('compare', 'single')),   -- все методы / один метод
     asked_at      TIMESTAMP NOT NULL DEFAULT now()
 );
 
@@ -73,16 +73,6 @@ CREATE TABLE candidates (
     FOREIGN KEY (request_id, method_id) REFERENCES method_runs (request_id, method_id) ON DELETE CASCADE
 );
 
--- Оценка пользователя: подошёл ли ответ faq_id на запрос. К методу не привязана —
--- засчитывается ли метод, вычисляется (см. представление v_method_answers).
-CREATE TABLE feedback (
-    request_id    UUID NOT NULL REFERENCES requests (request_id) ON DELETE CASCADE,
-    faq_id        INTEGER NOT NULL REFERENCES faq (faq_id) ON DELETE CASCADE,
-    helpful       BOOLEAN NOT NULL,
-    created_at    TIMESTAMP NOT NULL DEFAULT now(),
-    PRIMARY KEY (request_id, faq_id)
-);
-
 -- Вопрос без ответа обработан (ответ добавлен в FAQ)
 CREATE TABLE resolutions (
     request_id    UUID PRIMARY KEY REFERENCES requests (request_id) ON DELETE CASCADE,
@@ -91,15 +81,28 @@ CREATE TABLE resolutions (
 
 -- ---------- Оценка методов на тестовых вопросах ----------
 
+-- test_set: base (data/test_queries.csv) или paraphrases (data/paraphrases.csv);
+-- query_type — тип формулировки (сленг, синоним, опечатка…), topic — тема вопроса
 CREATE TABLE test_queries (
     query_id      SERIAL PRIMARY KEY,
     text          TEXT NOT NULL,
-    true_faq_id   INTEGER NOT NULL REFERENCES faq (faq_id)
+    true_faq_id   INTEGER NOT NULL REFERENCES faq (faq_id),
+    test_set      TEXT NOT NULL DEFAULT 'base',
+    query_type    TEXT,
+    topic         TEXT
+);
+
+-- Ответы FAQ, которые засчитываются как верные (основной, его дубликаты, равноценные по смыслу)
+CREATE TABLE test_acceptable (
+    query_id      INTEGER NOT NULL REFERENCES test_queries (query_id) ON DELETE CASCADE,
+    faq_id        INTEGER NOT NULL REFERENCES faq (faq_id) ON DELETE CASCADE,
+    PRIMARY KEY (query_id, faq_id)
 );
 
 CREATE TABLE runs (
     run_id        SERIAL PRIMARY KEY,
     method_id     INTEGER NOT NULL REFERENCES methods (method_id),
+    test_set      TEXT NOT NULL DEFAULT 'base',
     p_at_1        NUMERIC(5, 4),
     p_at_3        NUMERIC(5, 4),
     mrr           NUMERIC(5, 4),
