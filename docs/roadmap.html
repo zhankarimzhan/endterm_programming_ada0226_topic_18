@@ -1,0 +1,663 @@
+<title>Карта FAQ-бота AITU</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky table of contents on the left, one reading column on the right; a data path runs through the page as a numbered spine. */
+:root {
+  --bg: #f4f6f7;
+  --surface: #ffffff;
+  --ink: #16212b;
+  --muted: #5a6873;
+  --line: #d9e0e4;
+  --accent: #0b6b7d;
+  --accent-soft: #e0eff1;
+  --mark: #f3d77a;
+  --mark-ink: #4a3a00;
+  --good: #1f7a46;
+  --good-soft: #e1f2e8;
+  --bad: #b23a2e;
+  --bad-soft: #f8e4e1;
+  --warn: #8a5a00;
+  --warn-soft: #f7ecd2;
+  --code-bg: #eaeff1;
+  --m1: #7a4fb5; --m2: #2f6fb0; --m3: #0b6b7d; --m4: #b4552c; --m5: #4f7a1f;
+  --f-display: "Unbounded", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1519; --surface: #161e23; --ink: #e3e9ec; --muted: #94a3ad; --line: #2a363d;
+    --accent: #5cc4d4; --accent-soft: #15333a; --mark: #6b5713; --mark-ink: #fbe9a8;
+    --good: #6fd29a; --good-soft: #163325; --bad: #f08a7e; --bad-soft: #3a1c19;
+    --warn: #e9be62; --warn-soft: #362a10; --code-bg: #1d272d;
+    --m1: #b493e6; --m2: #7fb2ea; --m3: #5cc4d4; --m4: #ee9a74; --m5: #a5d06b;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1519; --surface: #161e23; --ink: #e3e9ec; --muted: #94a3ad; --line: #2a363d;
+  --accent: #5cc4d4; --accent-soft: #15333a; --mark: #6b5713; --mark-ink: #fbe9a8;
+  --good: #6fd29a; --good-soft: #163325; --bad: #f08a7e; --bad-soft: #3a1c19;
+  --warn: #e9be62; --warn-soft: #362a10; --code-bg: #1d272d;
+  --m1: #b493e6; --m2: #7fb2ea; --m3: #5cc4d4; --m4: #ee9a74; --m5: #a5d06b;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 16px/1.6 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+a { color: var(--accent); }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+code, .mono { font-family: var(--f-mono); font-size: .86em; }
+p code, li code, td code, dd code { background: var(--code-bg); padding: .08em .35em; border-radius: 4px; overflow-wrap: anywhere; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.2; }
+h2 { font: 700 1.55rem/1.2 var(--f-display); letter-spacing: -.01em; margin: 0 0 .4rem; }
+h3 { font: 600 1.1rem/1.3 var(--f-body); margin: 0; }
+p { margin: 0; max-width: 68ch; }
+
+.shell { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 40px 80px; }
+@media (max-width: 960px) { .shell { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 24px 56px; } }
+
+/* contents */
+.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; font-size: .9rem; }
+.toc .label { font: 500 .72rem/1 var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: toc; }
+.toc li { counter-increment: toc; }
+.toc a { display: flex; gap: 10px; padding: 5px 8px; border-radius: 6px; color: var(--ink); text-decoration: none; }
+.toc a::before { content: counter(toc, decimal-leading-zero); font: .75rem/1.9 var(--f-mono); color: var(--muted); }
+.toc a:hover { background: var(--accent-soft); }
+.toc .sub a { padding-left: 34px; font-size: .84rem; color: var(--muted); }
+.toc .sub a::before { content: none; }
+.toc .sub { counter-increment: none; }
+@media (max-width: 960px) {
+  .toc { position: static; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .toc ol { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+  .toc .sub { display: none; }
+}
+
+main { min-width: 0; display: grid; gap: 72px; }
+section { display: grid; gap: 20px; scroll-margin-top: 24px; }
+.eyebrow { font: 500 .74rem/1 var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+.lede { color: var(--muted); font-size: 1.04rem; }
+
+/* hero */
+.hero { gap: 18px; }
+.hero h1 { font: 700 clamp(1.9rem, 4.2vw, 2.9rem)/1.1 var(--f-display); letter-spacing: -.02em; margin: 0; }
+.hero h1 span { color: var(--accent); }
+.facts { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: .92rem; color: var(--muted); }
+.facts b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* data path */
+.path-wrap { overflow-x: auto; padding-bottom: 6px; }
+.path { display: grid; grid-template-columns: repeat(6, minmax(140px, 1fr)); gap: 0; min-width: 880px; counter-reset: stage; }
+.stage { position: relative; padding: 14px 18px 14px 14px; border-top: 3px solid var(--accent); background: var(--surface); counter-increment: stage; }
+.stage + .stage { border-left: 1px dashed var(--line); }
+.stage::before { content: counter(stage); font: 500 .72rem/1 var(--f-mono); color: var(--accent); display: block; margin-bottom: 8px; }
+.stage::after { content: "→"; position: absolute; right: -9px; top: 10px; color: var(--accent); font-weight: 600; background: var(--bg); padding: 0 1px; z-index: 1; }
+.stage:last-child::after { content: none; }
+.stage b { display: block; font-size: .95rem; margin-bottom: 4px; }
+.stage code { font-size: .75rem; color: var(--accent); }
+.stage p { font-size: .84rem; color: var(--muted); margin-top: 6px; line-height: 1.45; }
+
+/* tree */
+.tree { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 720px) { .tree { grid-template-columns: minmax(0, 1fr); } }
+.dir { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: grid; gap: 10px; align-content: start; }
+.dir header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.dir header code { font: 500 1rem var(--f-mono); color: var(--accent); }
+.dir header span { font-size: .88rem; color: var(--muted); }
+.dir dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; font-size: .88rem; }
+.dir dt { font-family: var(--f-mono); font-size: .8rem; padding-top: 2px; }
+.dir dd { margin: 0; color: var(--muted); }
+.dir.wide { grid-column: 1 / -1; }
+
+/* steps */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; counter-reset: s; }
+.steps > li { counter-increment: s; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.steps > li:last-child { border-bottom: 1px solid var(--line); }
+.steps > li::before { content: counter(s); font: 500 .8rem/1 var(--f-mono); width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: var(--accent-soft); color: var(--accent); }
+.steps h3 { font-size: 1rem; margin-bottom: 2px; }
+.steps h3 code { font-weight: 400; color: var(--muted); }
+.steps p { color: var(--muted); font-size: .94rem; }
+.count { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
+
+/* token transform */
+.tokens { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; }
+.tokens table { border-collapse: collapse; width: 100%; min-width: 560px; }
+.tokens th { text-align: left; font: 500 .74rem/1.3 var(--f-mono); color: var(--muted); padding: 12px 14px; width: 170px; vertical-align: middle; border-top: 1px solid var(--line); }
+.tokens td { padding: 10px 14px; border-top: 1px solid var(--line); }
+.tokens tr:first-child th, .tokens tr:first-child td { border-top: 0; }
+.tokens th small { display: block; color: var(--accent); font-size: .7rem; }
+.tok { display: inline-block; font: .86rem/1 var(--f-mono); padding: 5px 8px; margin: 2px 4px 2px 0; border-radius: 5px; background: var(--code-bg); }
+.tok.drop { text-decoration: line-through; opacity: .45; }
+.tok.hl { background: var(--mark); color: var(--mark-ink); }
+.tok.rule { background: var(--accent-soft); color: var(--accent); }
+.raw { font-family: var(--f-mono); font-size: .9rem; }
+
+.note { border-left: 3px solid var(--warn); background: var(--warn-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: .93rem; }
+.note b { color: var(--warn); }
+
+/* method */
+.method { --mc: var(--accent); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 24px; display: grid; gap: 18px; scroll-margin-top: 24px; }
+@media (max-width: 560px) { .method { padding: 18px 16px; } }
+.method[data-m="1"] { --mc: var(--m1); } .method[data-m="2"] { --mc: var(--m2); } .method[data-m="3"] { --mc: var(--m3); }
+.method[data-m="4"] { --mc: var(--m4); } .method[data-m="5"] { --mc: var(--m5); }
+.m-head { display: grid; gap: 8px; }
+.m-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.m-title h3 { font: 700 1.3rem/1.2 var(--f-display); color: var(--mc); }
+.m-title code { font-size: .84rem; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: .76rem/1 var(--f-mono); padding: 6px 9px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); font-variant-numeric: tabular-nums; }
+.chip b { color: var(--ink); font-weight: 500; }
+.m-idea { font-size: 1rem; }
+.phases { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 720px) { .phases { grid-template-columns: minmax(0, 1fr); } }
+.phase { display: grid; gap: 8px; align-content: start; }
+.phase h4 { margin: 0; font: 500 .74rem/1.2 var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--mc); }
+.phase h4 span { color: var(--muted); text-transform: none; letter-spacing: 0; }
+.phase ol { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; font-size: .93rem; }
+.phase ol li::marker { color: var(--mc); font-family: var(--f-mono); font-size: .85em; }
+.formula { font: .92rem/1.6 var(--f-mono); background: var(--code-bg); border-radius: 8px; padding: 12px 14px; overflow-x: auto; white-space: pre; }
+.example { border: 1px dashed var(--mc); border-radius: 10px; padding: 14px 16px; display: grid; gap: 10px; font-size: .93rem; min-width: 0; }
+.example .tag { font: 500 .72rem/1 var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--mc); }
+.example .calc { font: .86rem/1.7 var(--f-mono); overflow-x: auto; white-space: pre; }
+.proscons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; font-size: .92rem; }
+@media (max-width: 560px) { .proscons { grid-template-columns: minmax(0, 1fr); } }
+.proscons h4 { margin: 0 0 4px; font: 600 .86rem var(--f-body); }
+.proscons .pro h4 { color: var(--good); } .proscons .con h4 { color: var(--bad); }
+.proscons ul { margin: 0; padding-left: 1.1em; display: grid; gap: 3px; color: var(--muted); }
+
+/* tables */
+.tbl { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.tbl table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+.tbl th, .tbl td { text-align: left; padding: 10px 12px; border-top: 1px solid var(--line); vertical-align: top; }
+.tbl thead th { border-top: 0; font: 500 .72rem/1.3 var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); background: var(--bg); }
+.tbl td.num, .tbl th.num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--f-mono); font-size: .84rem; white-space: nowrap; }
+.tbl .mname { white-space: nowrap; font-weight: 500; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
+.cmp { min-width: 760px; }
+.cmp td { width: 20%; }
+.cmp th[scope="row"] { font-weight: 600; width: 180px; }
+.cell-q { display: block; font-size: .84rem; line-height: 1.35; }
+.cell-s { display: inline-flex; gap: 6px; align-items: center; margin-top: 6px; font: .76rem/1 var(--f-mono); font-variant-numeric: tabular-nums; }
+.verdict { padding: 3px 7px; border-radius: 99px; font: 500 .7rem/1 var(--f-body); }
+.v-ok { background: var(--good-soft); color: var(--good); }
+.v-no { background: var(--bad-soft); color: var(--bad); }
+.v-mid { background: var(--warn-soft); color: var(--warn); }
+.eval { min-width: 640px; }
+.eval tr.best td { background: var(--accent-soft); }
+
+/* request flow */
+.flow { display: grid; gap: 0; }
+.flow-row { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-top: 1px solid var(--line); align-items: start; }
+.flow-row:last-child { border-bottom: 1px solid var(--line); }
+@media (max-width: 560px) { .flow-row { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+.flow-row code.t { font-size: .84rem; color: var(--accent); font-weight: 500; }
+.flow-row p { font-size: .93rem; color: var(--muted); }
+
+.cmd { background: var(--code-bg); border-radius: 10px; padding: 16px 18px; overflow-x: auto; font: .84rem/1.75 var(--f-mono); white-space: pre; }
+.cmd .c { color: var(--muted); }
+
+.read-order .steps > li { grid-template-columns: 34px minmax(0, 1fr); }
+.q { font-size: .88rem; color: var(--muted); font-style: italic; margin-top: 4px; }
+footer { color: var(--muted); font-size: .85rem; border-top: 1px solid var(--line); padding-top: 18px; }
+</style>
+
+<div class="shell">
+  <nav class="toc" aria-label="Содержание">
+    <div class="label">Содержание</div>
+    <ol>
+      <li><a href="#path">Путь данных</a></li>
+      <li><a href="#tree">Где что лежит</a></li>
+      <li><a href="#data">Подготовка данных</a></li>
+      <li><a href="#prep">Обработка текста</a></li>
+      <li><a href="#methods">Методы поиска</a></li>
+      <li class="sub"><a href="#m-rule">Rule-based</a></li>
+      <li class="sub"><a href="#m-bow">Bag of Words</a></li>
+      <li class="sub"><a href="#m-tfidf">TF-IDF</a></li>
+      <li class="sub"><a href="#m-emb">Embeddings</a></li>
+      <li class="sub"><a href="#m-trgm">pg_trgm</a></li>
+      <li><a href="#compare">Один запрос, пять ответов</a></li>
+      <li><a href="#bot">Что пишется в базу</a></li>
+      <li><a href="#eval">Оценка методов</a></li>
+      <li><a href="#order">Порядок чтения кода</a></li>
+      <li><a href="#run">Запуск</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <section class="hero">
+      <div class="eyebrow">faq-chatbot · карта проекта</div>
+      <h1>Как бот находит ответ <span>на вопрос абитуриента</span></h1>
+      <p class="lede">Telegram-бот отвечает на вопросы о поступлении в Astana IT University. Он ищет в FAQ вопрос, самый похожий на вопрос пользователя, и отдаёт его ответ. Похожесть считают пять разных методов, и проект сравнивает, какой из них справляется лучше. Ниже по порядку: откуда берутся данные, как обрабатывается текст, как устроен каждый метод и в каком файле что лежит.</p>
+      <div class="facts">
+        <span>Вопросов в FAQ: <b>556</b> (из 608 строк)</span>
+        <span>Методов: <b>5</b> + 3 варианта с лемматизацией</span>
+        <span>Тестовых вопросов: <b>40</b></span>
+        <span>Таблиц в PostgreSQL: <b>13</b></span>
+      </div>
+    </section>
+
+    <section id="path">
+      <div class="eyebrow">01 · Путь данных</div>
+      <h2>От CSV до ответа в Telegram</h2>
+      <p class="lede">Каждая папка проекта отвечает за один участок этого пути. Если читать код в том же порядке, всё складывается.</p>
+      <div class="path-wrap">
+        <div class="path">
+          <div class="stage"><b>Сырые данные</b><code>data_prep/download.py</code><p>CSV с Hugging Face, копия в <code>data/raw.parquet</code></p></div>
+          <div class="stage"><b>Очистка</b><code>data_prep/cleaning.py</code><p>608 → 556 вопросов, запись в таблицу <code>faq</code></p></div>
+          <div class="stage"><b>Обработка текста</b><code>preprocessing/</code><p>регистр, слова, стоп-слова, стемминг или лемматизация</p></div>
+          <div class="stage"><b>Методы</b><code>methods/</code><p>fit() строит индекс, scores() считает сходство</p></div>
+          <div class="stage"><b>Поиск и история</b><code>search/</code><p>все методы на одном запросе, запись в базу</p></div>
+          <div class="stage"><b>Интерфейс и аналитика</b><code>bot.py · dashboard.py · analytics/</code><p>ответ, 👍/👎, статистика, метрики</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tree">
+      <div class="eyebrow">02 · Структура</div>
+      <h2>Где что лежит</h2>
+      <p class="lede">Точки входа остались в корне. Всё остальное разложено по папкам, и у каждой папки в <code>__init__.py</code> есть короткое описание её шагов.</p>
+      <div class="tree">
+        <div class="dir wide">
+          <header><code>/</code><span>корень: то, что запускают руками</span></header>
+          <dl>
+            <dt>init_project.py</dt><dd>первичный запуск, один раз: загрузка FAQ, обратный индекс, оценка на тестовых вопросах. Повторный запуск ничего не дублирует, <code>--force</code> пересчитывает оценку</dd>
+            <dt>bot.py</dt><dd>Telegram-бот: <code>/start</code>, <code>/method</code>, <code>/stats</code>, <code>/app</code>, кнопки 👍/👎. По умолчанию отвечает всеми методами сразу</dd>
+            <dt>dashboard.py</dt><dd>дашборд Streamlit (мини-приложение Telegram): статистика, запросы, совпадения, предложения, SQL</dd>
+            <dt>queries.sql</dt><dd>13 аналитических SQL-запросов (оконные функции, CTE, self-JOIN)</dd>
+            <dt>sql/init/</dt><dd><code>01_schema.sql</code> таблицы, <code>02_search.sql</code> расширение pg_trgm, <code>03_views.sql</code> представления</dd>
+            <dt>data/</dt><dd><code>raw.parquet</code> исходник, <code>faq.parquet</code> после очистки, <code>test_queries.csv</code> 40 перефраз с правильным ответом</dd>
+          </dl>
+        </div>
+        <div class="dir">
+          <header><code>data_prep/</code><span>подготовка данных</span></header>
+          <dl>
+            <dt>download.py</dt><dd>шаг 1: скачать CSV или взять сохранённую копию</dd>
+            <dt>cleaning.py</dt><dd>шаг 2: очистка, сводка «что было, что осталось»</dd>
+            <dt>storage.py</dt><dd>шаг 3: запись в <code>faq</code>, чтение <code>load_faq()</code></dd>
+            <dt>term_index.py</dt><dd>шаг 4: обратный индекс <code>terms</code> / <code>faq_terms</code></dd>
+            <dt>pipeline.py</dt><dd>все шаги подряд</dd>
+          </dl>
+        </div>
+        <div class="dir">
+          <header><code>preprocessing/</code><span>обработка текста</span></header>
+          <dl>
+            <dt>normalize.py</dt><dd>шаги 1–2: нижний регистр, ё → е, разбиение на слова</dd>
+            <dt>stopwords.py</dt><dd>шаг 3: стоп-слова NLTK без вопросительных слов</dd>
+            <dt>stemming.py</dt><dd>шаг 4а: Snowball</dd>
+            <dt>lemmatization.py</dt><dd>шаг 4б: pymorphy3</dd>
+            <dt>pipeline.py</dt><dd><code>preprocess()</code>: шаги 1–4 вместе</dd>
+          </dl>
+        </div>
+        <div class="dir">
+          <header><code>methods/</code><span>по файлу на метод</span></header>
+          <dl>
+            <dt>base.py</dt><dd>общий интерфейс <code>fit / scores / search</code>, замер памяти</dd>
+            <dt>rule_based.py</dt><dd>правила синонимов + Жаккар</dd>
+            <dt>bow.py</dt><dd>счётчик слов + косинус</dd>
+            <dt>tfidf.py</dt><dd>веса TF-IDF, биграммы + косинус</dd>
+            <dt>embeddings.py</dt><dd>нейросеть MiniLM + косинус</dd>
+            <dt>pg_trgm.py</dt><dd>триграммы в PostgreSQL</dd>
+          </dl>
+        </div>
+        <div class="dir">
+          <header><code>search/</code> <code>db/</code> <code>analytics/</code><span>вокруг методов</span></header>
+          <dl>
+            <dt>search/runner.py</dt><dd>обучение методов с замером времени и памяти, <code>compare_all()</code></dd>
+            <dt>search/history.py</dt><dd>запись запросов, кандидатов и отзывов</dd>
+            <dt>db/connection.py</dt><dd>подключение по <code>.env</code>, <code>run_query()</code></dd>
+            <dt>analytics/evaluation.py</dt><dd>P@1, P@3, MRR на тестовых вопросах</dd>
+            <dt>analytics/stats.py</dt><dd>статистика для <code>/stats</code> и дашборда</dd>
+            <dt>analytics/queries_runner.py</dt><dd>выполняет <code>queries.sql</code>, CSV в <code>results/sql/</code></dd>
+          </dl>
+        </div>
+      </div>
+    </section>
+
+    <section id="data">
+      <div class="eyebrow">03 · data_prep/</div>
+      <h2>Подготовка данных</h2>
+      <p class="lede">Датасет AITU Admissions Guide с Hugging Face: вопрос, ответ и метка темы. В сыром виде в нём есть повторы, пустые строки и даже копия заголовка CSV посреди данных.</p>
+      <ol class="steps">
+        <li><div><h3>Скачивание <code>download.py</code></h3><p>CSV читается напрямую с Hugging Face, колонки переименовываются в <code>question</code>, <code>answer</code>, <code>raw_label</code>. Копия сохраняется в <code>data/raw.parquet</code>, и если сети нет, берётся она. Строк: <span class="count">608</span>.</p></div></li>
+        <li><div><h3>Очистка <code>cleaning.py → clean()</code></h3><p>2.1 лишние пробелы и переносы строк схлопываются. 2.2 удаляются пустые вопросы или ответы и строка, повторяющая заголовок CSV. 2.3 удаляются точные дубликаты пары «вопрос + ответ». 2.4 если у одного вопроса несколько разных ответов, остаётся самый длинный, то есть самый полный. 2.5 вопросы нумеруются заново, получается <code>faq_id</code>. Остаётся <span class="count">556</span>.</p></div></li>
+        <li><div><h3>Запись в базу <code>storage.py → load_to_db()</code></h3><p>Очищенный FAQ пишется в таблицу <code>faq</code> и в <code>data/faq.parquet</code>. Если в таблице уже есть данные, загрузка пропускается. С <code>replace=True</code> выполняется <code>TRUNCATE faq CASCADE</code>, и вместе с FAQ стираются кандидаты и отзывы.</p></div></li>
+        <li><div><h3>Обратный индекс <code>term_index.py</code></h3><p>Каждый вопрос проходит предобработку, и для каждого стемма записывается, в каком вопросе он встречается и сколько раз. Получается <span class="count">825</span> терминов и <span class="count">4224</span> связи «вопрос — термин». По этим таблицам SQL-запросы считают частоты слов, TF-IDF и почти-дубликаты прямо в PostgreSQL.</p></div></li>
+      </ol>
+    </section>
+
+    <section id="prep">
+      <div class="eyebrow">04 · preprocessing/</div>
+      <h2>Обработка текста</h2>
+      <p class="lede">Для Rule-based, Bag of Words и TF-IDF текст сначала превращают в список «основ» слов, чтобы «обучение», «обучения» и «обучением» считались одним словом. Embeddings и pg_trgm эту обработку не используют. Ниже реальный вывод <code>preprocess()</code>.</p>
+      <div class="tokens">
+        <table>
+          <tr><th>Вопрос пользователя</th><td class="raw">Сколько стоит обучение в АИТУ</td></tr>
+          <tr><th>Шаг 1 · нормализация<small>normalize.py</small></th><td class="raw">сколько стоит обучение в аиту</td></tr>
+          <tr><th>Шаг 2 · слова<small>normalize.py</small></th><td><span class="tok">сколько</span><span class="tok">стоит</span><span class="tok">обучение</span><span class="tok">в</span><span class="tok">аиту</span></td></tr>
+          <tr><th>Шаг 3 · стоп-слова<small>stopwords.py</small></th><td><span class="tok">сколько</span><span class="tok">стоит</span><span class="tok">обучение</span><span class="tok drop">в</span><span class="tok">аиту</span></td></tr>
+          <tr><th>Шаг 4а · стемминг<small>stemming.py</small></th><td><span class="tok">скольк</span><span class="tok hl">сто</span><span class="tok">обучен</span><span class="tok">аит</span></td></tr>
+          <tr><th>Шаг 4б · лемматизация<small>lemmatization.py</small></th><td><span class="tok">сколько</span><span class="tok">стоить</span><span class="tok">обучение</span><span class="tok">аит</span></td></tr>
+        </table>
+      </div>
+      <ol class="steps">
+        <li><div><h3>Нормализация</h3><p>Нижний регистр и замена ё на е, иначе «Ёлка» и «елка» были бы разными словами.</p></div></li>
+        <li><div><h3>Разбиение на слова</h3><p>Регулярное выражение <code>[a-zа-я0-9]+</code> оставляет кириллицу, латиницу и цифры, знаки препинания отбрасываются.</p></div></li>
+        <li><div><h3>Стоп-слова</h3><p>Список NLTK для русского: «в», «и», «на», «ли», «есть». Они встречаются почти везде и не помогают отличить вопросы. Вопросительные слова («как», «где», «сколько», «можно») из списка специально убраны: в FAQ они задают смысл вопроса. Список скачивается в папку <code>nltk_data/</code> проекта.</p></div></li>
+        <li><div><h3>Стемминг или лемматизация</h3><p>Стеммер Snowball отрезает окончание по правилам, без словаря: быстро, но основа бывает не словом. Лемматизатор pymorphy3 ищет словарную форму: «стоит» → «стоить». Обе функции кэшируются (<code>lru_cache</code>), поэтому каждое слово разбирается один раз. По умолчанию методы используют стемминг, вариант с лемматизацией строится для сравнения.</p></div></li>
+      </ol>
+      <div class="note"><b>Подвох стемминга.</b> «стоит» превращается в <code>сто</code>, то есть совпадает с числом 100. А «аиту» стеммер не знает и режет до <code>аит</code>. Лемматизатор даёт <code>стоить</code>, поэтому на тестовых вопросах варианты с лемматизацией работают заметно лучше (см. раздел 08).</div>
+    </section>
+
+    <section id="methods">
+      <div class="eyebrow">05 · methods/</div>
+      <h2>Методы поиска</h2>
+      <p class="lede">Все пять методов отвечают на один вопрос: насколько вопрос пользователя похож на каждый из 556 вопросов FAQ. Отличаются они только способом подсчёта. Каждый метод работает в два этапа, это задано в <code>methods/base.py</code>:</p>
+      <div class="phases">
+        <div class="phase"><h4>fit(faq) <span>один раз при запуске</span></h4><p>Метод строит индекс по вопросам FAQ: множества слов, матрицу частот или векторы нейросети. Время и память замеряются и пишутся в таблицу <code>methods</code>.</p></div>
+        <div class="phase"><h4>search(query, k) <span>на каждый вопрос</span></h4><p><code>scores()</code> возвращает массив из 556 чисел сходства, затем берутся k лучших. Если лучшее сходство ниже порога метода (<code>min_score</code>), ответ считается ненайденным.</p></div>
+      </div>
+      <p>Методы расположены от простого к сложному. Время подготовки и память ниже измерены на вашей базе.</p>
+
+      <article class="method" id="m-rule" data-m="1">
+        <div class="m-head">
+          <div class="m-title"><h3>1. Rule-based</h3><code>methods/rule_based.py</code></div>
+          <div class="chips"><span class="chip">базовый метод</span><span class="chip">обработка: <b>стемминг</b></span><span class="chip">порог: <b>0.15</b></span><span class="chip">подготовка: <b>0.03 с</b></span><span class="chip">память: <b>0.03 МБ</b></span></div>
+        </div>
+        <p class="m-idea">Вручную написанные правила приводят сленг и разные написания к одному слову, а потом считается доля общих слов. Нейросетей и статистики нет, это точка отсчёта для остальных методов.</p>
+        <div class="phases">
+          <div class="phase"><h4>Подготовка <span>fit</span></h4><ol>
+            <li>К каждому вопросу FAQ применяются правила <code>RULES</code>: «аиту», «astana it university» → <code>aitu</code>; «общага» → «общежитие»; «цена», «оплата» → «стоимость»; «универ», «вуз» → «университет»; «стипуха» → «стипендия».</li>
+            <li>Предобработка: слова, стоп-слова, стемминг.</li>
+            <li>Вопрос запоминается как множество слов.</li>
+          </ol></div>
+          <div class="phase"><h4>Поиск <span>scores</span></h4><ol>
+            <li>Те же правила и предобработка для запроса.</li>
+            <li>Для каждого вопроса FAQ считается коэффициент Жаккара.</li>
+          </ol></div>
+        </div>
+        <div class="formula">Жаккар(A, B) = |A ∩ B| / |A ∪ B|        от 0 (ничего общего) до 1 (те же слова)</div>
+        <div class="example">
+          <span class="tag">Пример из базы</span>
+          <p>«есть ли общага»: правило заменяет «общага» на «общежитие», а «есть» и «ли» уходят как стоп-слова. От запроса остаётся <code>{общежит}</code>, и у FAQ «Есть ли у вас общежитие?» множество такое же.</p>
+          <div class="calc">запрос        {общежит}
+FAQ           {общежит}
+Жаккар        1 / 1 = 1.00   → правильный ответ</div>
+          <p>«сколько стоит обучение в аиту» → <code>{скольк, сто, обучен, aitu}</code>. Лучшим оказывается «Сколько лет длится обучение в AITU?» с множеством <code>{скольк, лет, длит, обучен, aitu}</code>: 3 общих слова из 6 разных, сходство 0.50. Ответ неверный: правила ничего не знают о том, что «стоит» значит «стоимость».</p>
+        </div>
+        <div class="proscons">
+          <div class="pro"><h4>Сильные стороны</h4><ul><li>самый быстрый (меньше 1 мс) и самый маленький</li><li>понятно, почему выбран ответ</li><li>правила ловят сленг, на котором ломаются BoW и TF-IDF</li></ul></div>
+          <div class="con"><h4>Слабые стороны</h4><ul><li>знает только синонимы из правил, их надо дописывать руками</li><li>все слова одинаково важны: «сколько» весит столько же, сколько «обучение»</li></ul></div>
+        </div>
+      </article>
+
+      <article class="method" id="m-bow" data-m="2">
+        <div class="m-head">
+          <div class="m-title"><h3>2. Bag of Words</h3><code>methods/bow.py</code></div>
+          <div class="chips"><span class="chip">обработка: <b>стемминг</b></span><span class="chip">порог: <b>0.3</b></span><span class="chip">подготовка: <b>0.01 с</b></span><span class="chip">память: <b>0.07 МБ</b></span></div>
+        </div>
+        <p class="m-idea">«Мешок слов»: вопрос превращается в вектор, где каждая позиция означает слово из словаря, а число в ней показывает, сколько раз слово встретилось. Порядок слов теряется, остаётся только их состав.</p>
+        <div class="phases">
+          <div class="phase"><h4>Подготовка <span>fit</span></h4><ol>
+            <li>Предобработка каждого вопроса FAQ.</li>
+            <li><code>CountVectorizer</code> собирает словарь из всех разных стеммов.</li>
+            <li>Строится матрица 556 × размер словаря: в ячейке число вхождений слова в вопрос.</li>
+          </ol></div>
+          <div class="phase"><h4>Поиск <span>scores</span></h4><ol>
+            <li>Та же предобработка запроса.</li>
+            <li>Запрос переводится в вектор того же словаря. Слова, которых нет в FAQ, отбрасываются.</li>
+            <li>Считается косинусное сходство запроса с каждой строкой матрицы.</li>
+          </ol></div>
+        </div>
+        <div class="formula">cos(q, d) = (q · d) / (|q| · |d|)        1 — одинаковый состав слов, 0 — ни одного общего</div>
+        <div class="example">
+          <span class="tag">Пример из базы</span>
+          <div class="calc">запрос   [скольк:1, сто:1, обучен:1, аит:1]                 |q| = √4 = 2
+FAQ      «Сколько стоит проживание в общежитии?»
+         [скольк:1, сто:1, проживан:1, общежит:1]           |d| = √4 = 2
+q · d    скольк + сто = 2
+cos      2 / (2 · 2) = 0.50   → неверный ответ</div>
+          <p>С тем же сходством 0.50 идут ещё два вопроса. BoW не видит разницы между «обучением» и «проживанием»: совпали два слова из четырёх, и этого достаточно. А на запросе «есть ли общага» метод возвращает 0 у всех вопросов, потому что стемма <code>общаг</code> нет в словаре FAQ.</p>
+        </div>
+        <div class="proscons">
+          <div class="pro"><h4>Сильные стороны</h4><ul><li>стандартный и быстрый метод</li><li>учитывает повторы слов</li></ul></div>
+          <div class="con"><h4>Слабые стороны</h4><ul><li>все слова равноценны, частые слова перевешивают важные</li><li>незнакомое слово (сленг, опечатка) просто пропадает</li></ul></div>
+        </div>
+      </article>
+
+      <article class="method" id="m-tfidf" data-m="3">
+        <div class="m-head">
+          <div class="m-title"><h3>3. TF-IDF</h3><code>methods/tfidf.py</code></div>
+          <div class="chips"><span class="chip">обработка: <b>стемминг</b></span><span class="chip">порог: <b>0.3</b></span><span class="chip">подготовка: <b>0.02 с</b></span><span class="chip">память: <b>0.20 МБ</b></span></div>
+        </div>
+        <p class="m-idea">Это Bag of Words с весами: редкое слово важнее частого. Слово, которое есть почти в каждом вопросе (например, «аиту»), мало говорит о теме, а слово из двух-трёх вопросов говорит много. Кроме слов учитываются биграммы, то есть пары соседних слов.</p>
+        <div class="phases">
+          <div class="phase"><h4>Подготовка <span>fit</span></h4><ol>
+            <li>Предобработка каждого вопроса FAQ.</li>
+            <li>Словарь из слов и биграмм (<code>ngram_range=(1, 2)</code>): «скольк», «сто», «скольк сто».</li>
+            <li>TF: <code>1 + log(число вхождений)</code> (<code>sublinear_tf</code>), чтобы повтор слова не раздувал вес.</li>
+            <li>IDF: чем в меньшем числе вопросов встречается термин, тем больше вес.</li>
+            <li>Вес = TF × IDF, вектор каждого вопроса нормируется до длины 1.</li>
+          </ol></div>
+          <div class="phase"><h4>Поиск <span>scores</span></h4><ol>
+            <li>Та же предобработка запроса.</li>
+            <li>Вектор запроса с теми же IDF.</li>
+            <li>Косинусное сходство с каждым вопросом.</li>
+          </ol></div>
+        </div>
+        <div class="formula">idf(t) = ln((1 + N) / (1 + df(t))) + 1      N = 556 вопросов, df — в скольких вопросах есть термин
+вес(t) = (1 + ln tf) × idf(t), затем вектор делится на свою длину</div>
+        <div class="example">
+          <span class="tag">Пример из базы: веса запроса «сколько стоит обучение в аиту»</span>
+          <div class="calc">термин        idf    вес в запросе
+скольк сто    6.63   0.600   ← биграмма есть только в одном вопросе FAQ
+сто           5.94   0.537
+скольк        4.55   0.412
+аит           3.45   0.312
+обучен        3.23   0.292   ← частое слово, низкий вес</div>
+          <p>Самый тяжёлый термин — биграмма «скольк сто», и она есть ровно в одном вопросе: «Сколько стоит проживание в общежитии?». Поэтому TF-IDF уверенно (0.586) выбирает неверный ответ. Метод правильно нашёл самое редкое совпадение, но не понял, что спрашивали про обучение.</p>
+        </div>
+        <div class="proscons">
+          <div class="pro"><h4>Сильные стороны</h4><ul><li>важные слова решают, частые почти не мешают</li><li>биграммы ловят устойчивые фразы («проходной балл»)</li><li>те же веса можно посчитать SQL-запросом по обратному индексу (<code>tfidf_keywords</code> в <code>queries.sql</code>)</li></ul></div>
+          <div class="con"><h4>Слабые стороны</h4><ul><li>не понимает смысл: «стоимость обучения» и «сколько стоит учиться» для него разные слова</li><li>ошибка стемминга («сто») прямо влияет на веса</li></ul></div>
+        </div>
+      </article>
+
+      <article class="method" id="m-emb" data-m="4">
+        <div class="m-head">
+          <div class="m-title"><h3>4. Embeddings</h3><code>methods/embeddings.py</code></div>
+          <div class="chips"><span class="chip">обработка: <b>нет, исходный текст</b></span><span class="chip">порог: <b>0.5</b></span><span class="chip">подготовка: <b>9.3 с</b></span><span class="chip">память: <b>450 МБ</b></span></div>
+        </div>
+        <p class="m-idea">Готовая нейросеть переводит смысл фразы в вектор из 384 чисел, и близкие по смыслу фразы получают близкие векторы, даже если у них нет общих слов. Модель <code>paraphrase-multilingual-MiniLM-L12-v2</code> уже обучена на парах перефраз на многих языках. В проекте она не обучается, только применяется.</p>
+        <div class="phases">
+          <div class="phase"><h4>Подготовка <span>fit</span></h4><ol>
+            <li>Загрузка модели (<code>SentenceTransformer</code>, на CPU). Импорт тяжёлый, поэтому делается только внутри <code>_fit</code>.</li>
+            <li>Все 556 вопросов кодируются в векторы как есть, без стоп-слов и стемминга. Векторы нормируются до длины 1.</li>
+          </ol></div>
+          <div class="phase"><h4>Поиск <span>scores</span></h4><ol>
+            <li>Запрос кодируется той же моделью.</li>
+            <li>Сходство считается как скалярное произведение. Векторы нормированы, поэтому это и есть косинус.</li>
+          </ol></div>
+        </div>
+        <div class="formula">scores = matrix @ q        matrix: 556 × 384,  q: 384,  |q| = |d| = 1  ⇒  q · d = cos(q, d)</div>
+        <div class="example">
+          <span class="tag">Пример из базы</span>
+          <p>«сколько стоит обучение в аиту» → «Какова стоимость обучения в университете?», сходство 0.74. Общих стеммов почти нет, но смысл совпал. Из пяти методов только этот нашёл правильный ответ на этот запрос.</p>
+          <p>На запросе «есть ли общага» модель ошибается: лучший ответ «Есть пробники по АЕТ?» (0.52, выше порога 0.5), а правильный «Есть ли у вас общежитие?» только на третьем месте (0.39). Короткий сленговый запрос модель понимает плохо.</p>
+        </div>
+        <div class="proscons">
+          <div class="pro"><h4>Сильные стороны</h4><ul><li>понимает синонимы и перефразы</li><li>работает с разными языками и не требует предобработки</li></ul></div>
+          <div class="con"><h4>Слабые стороны</h4><ul><li>в 10–20 раз медленнее словесных методов (около 12–20 мс на запрос), 450 МБ памяти (почти всё занимают веса модели), загрузка около 9 с</li><li>не видно, почему выбран ответ</li><li>сленг и очень короткие запросы</li></ul></div>
+        </div>
+      </article>
+
+      <article class="method" id="m-trgm" data-m="5">
+        <div class="m-head">
+          <div class="m-title"><h3>5. pg_trgm</h3><code>methods/pg_trgm.py</code></div>
+          <div class="chips"><span class="chip">считается в PostgreSQL</span><span class="chip">обработка: <b>нижний регистр</b></span><span class="chip">порог: <b>0.3</b></span><span class="chip">память: <b>0.38 МБ</b> (таблица faq)</span></div>
+        </div>
+        <p class="m-idea">Сравнение идёт не по словам, а по кусочкам из трёх букв (триграммам). Весь подсчёт делает расширение PostgreSQL <code>pg_trgm</code> одним SQL-запросом, Python только раскладывает результаты по порядку.</p>
+        <div class="phases">
+          <div class="phase"><h4>Подготовка <span>fit</span></h4><ol>
+            <li>Вопросы уже лежат в таблице <code>faq</code>, индекс в Python не нужен. Запоминается только позиция каждого <code>faq_id</code>.</li>
+          </ol></div>
+          <div class="phase"><h4>Поиск <span>scores</span>, в базе</h4><ol>
+            <li>Запрос и вопрос переводятся в нижний регистр.</li>
+            <li>Каждое слово дополняется пробелами и режется на триграммы.</li>
+            <li><code>word_similarity</code> считает, какая доля триграмм запроса нашлась в самом похожем фрагменте вопроса. Длинный вопрос не штрафуется за лишние слова.</li>
+          </ol></div>
+        </div>
+        <div class="formula">SELECT faq_id, word_similarity(lower(:q), lower(question)) FROM faq
+
+«общага»    → "  о"  " об"  "общ"  "бща"  "ага"  "га "
+«общежитие» → "  о"  " об"  "общ"  "бще"  "жит" …       общих: 3 из 6</div>
+        <div class="example">
+          <span class="tag">Пример из базы</span>
+          <p>«есть ли общага» → «Есть ли общежитие в AITU?», 0.73. Начало слова «общ» и фраза «есть ли» совпали по триграммам, хотя слово «общага» в FAQ нигде не встречается. Это правильный ответ.</p>
+          <p>«сколько стоит обучение в аиту» → «Сколько стоит проживание в общежитии?», 0.50. Совпали буквы фразы «сколько стоит», а смысл другой.</p>
+        </div>
+        <div class="proscons">
+          <div class="pro"><h4>Сильные стороны</h4><ul><li>устойчив к опечаткам и окончаниям («поступить» и «поступление» делят много триграмм)</li><li>не нужен Python-индекс, всё в базе</li></ul></div>
+          <div class="con"><h4>Слабые стороны</h4><ul><li>не понимает смысл и синонимы</li><li>«AITU» и «аиту» для него разные строки (разные алфавиты)</li><li>обращается к базе на каждый запрос, около 15–20 мс</li></ul></div>
+        </div>
+      </article>
+    </section>
+
+    <section id="compare">
+      <div class="eyebrow">06 · search/runner.py → compare_all()</div>
+      <h2>Один запрос, пять ответов</h2>
+      <p class="lede">Так бот работает в режиме сравнения: каждый метод возвращает свой лучший вопрос FAQ. Результаты получены запуском <code>compare_all()</code> на вашей базе.</p>
+      <div class="tbl">
+        <table class="cmp">
+          <thead><tr><th>Запрос</th><th><span class="dot" style="background:var(--m1)"></span>Rule-based</th><th><span class="dot" style="background:var(--m2)"></span>BoW</th><th><span class="dot" style="background:var(--m3)"></span>TF-IDF</th><th><span class="dot" style="background:var(--m4)"></span>Embeddings</th><th><span class="dot" style="background:var(--m5)"></span>pg_trgm</th></tr></thead>
+          <tbody>
+            <tr>
+              <th scope="row">сколько стоит обучение в аиту</th>
+              <td><span class="cell-q">Сколько лет длится обучение в AITU?</span><span class="cell-s">0.50 <span class="verdict v-no">неверно</span></span></td>
+              <td><span class="cell-q">Сколько стоит проживание в общежитии?</span><span class="cell-s">0.50 <span class="verdict v-no">неверно</span></span></td>
+              <td><span class="cell-q">Сколько стоит проживание в общежитии?</span><span class="cell-s">0.59 <span class="verdict v-no">неверно</span></span></td>
+              <td><span class="cell-q">Какова стоимость обучения в университете?</span><span class="cell-s">0.74 <span class="verdict v-ok">верно</span></span></td>
+              <td><span class="cell-q">Сколько стоит проживание в общежитии?</span><span class="cell-s">0.50 <span class="verdict v-no">неверно</span></span></td>
+            </tr>
+            <tr>
+              <th scope="row">есть ли общага</th>
+              <td><span class="cell-q">Есть ли у вас общежитие?</span><span class="cell-s">1.00 <span class="verdict v-ok">верно</span></span></td>
+              <td><span class="cell-q">—</span><span class="cell-s">0.00 <span class="verdict v-mid">не найдено</span></span></td>
+              <td><span class="cell-q">—</span><span class="cell-s">0.00 <span class="verdict v-mid">не найдено</span></span></td>
+              <td><span class="cell-q">Есть пробники по АЕТ?</span><span class="cell-s">0.52 <span class="verdict v-no">неверно</span></span></td>
+              <td><span class="cell-q">Есть ли общежитие в AITU?</span><span class="cell-s">0.73 <span class="verdict v-ok">верно</span></span></td>
+            </tr>
+            <tr>
+              <th scope="row">как поступить в аиту</th>
+              <td><span class="cell-q">Как поступить в AITU?</span><span class="cell-s">1.00 <span class="verdict v-ok">верно</span></span></td>
+              <td><span class="cell-q">Как поступить в AITU?</span><span class="cell-s">0.66 <span class="verdict v-ok">верно</span></span></td>
+              <td><span class="cell-q">Как поступить в AITU?</span><span class="cell-s">0.49 <span class="verdict v-ok">верно</span></span></td>
+              <td><span class="cell-q">Что нужно сдать чтобы поступить в АИТУ?</span><span class="cell-s">0.72 <span class="verdict v-mid">соседний</span></span></td>
+              <td><span class="cell-q">Что нужно сдать чтобы поступить в АИТУ?</span><span class="cell-s">0.81 <span class="verdict v-mid">соседний</span></span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Ни один метод не выигрывает везде. Embeddings спасают перефразы, правила и триграммы спасают сленг, словесные методы точны, когда слова совпадают. Поэтому бот по умолчанию показывает ответы всех методов, а пользователь отмечает подходящий.</p>
+    </section>
+
+    <section id="bot">
+      <div class="eyebrow">07 · search/history.py · sql/init/</div>
+      <h2>Что пишется в базу на один вопрос</h2>
+      <p class="lede">Схема нормализована: вопрос, запуск метода, кандидаты и отзыв хранятся в разных таблицах. Всё, что можно вычислить, вычисляется представлениями, а не хранится.</p>
+      <div class="flow">
+        <div class="flow-row"><code class="t">requests</code><p>1 строка: текст вопроса и режим (<code>compare</code> — все методы, <code>single</code> — один метод, <code>test</code> — тестовые вопросы из <code>init_project.py</code>).</p></div>
+        <div class="flow-row"><code class="t">method_runs</code><p>по строке на каждый метод: какой метод и сколько миллисекунд занял поиск.</p></div>
+        <div class="flow-row"><code class="t">candidates</code><p>топ-3 каждого метода: место, <code>faq_id</code>, сходство. На один вопрос в режиме сравнения это 15 строк.</p></div>
+        <div class="flow-row"><code class="t">feedback</code><p>👍 или 👎 пользователя на конкретный ответ (<code>faq_id</code>). Отзыв привязан к ответу, а не к методу: если два метода дали один и тот же ответ, отзыв засчитывается обоим.</p></div>
+        <div class="flow-row"><code class="t">v_method_answers</code><p>представление: ответ каждого метода на каждый вопрос, прошёл ли он порог (<code>found</code>) и засчитан ли (<code>helpful</code>). Если пользователь одобрил другой ответ, а этот не оценил, ответ этого метода считается ошибкой.</p></div>
+        <div class="flow-row"><code class="t">v_unanswered</code><p>представление: вопросы без подходящего ответа. <code>not_found</code> — никто не прошёл порог, <code>bad_answer</code> — все ответы отклонены. Отсюда берутся предложения для пополнения FAQ.</p></div>
+        <div class="flow-row"><code class="t">methods</code><p>справочник: имя, тип обработки, порог, время подготовки и память. Вариант с лемматизацией хранится как отдельный метод.</p></div>
+        <div class="flow-row"><code class="t">test_queries · runs · predictions</code><p>оценка на тестовых вопросах: 40 вопросов, метрики каждого прогона и топ-3 каждого метода по каждому вопросу.</p></div>
+      </div>
+    </section>
+
+    <section id="eval">
+      <div class="eyebrow">08 · analytics/evaluation.py</div>
+      <h2>Оценка методов на тестовых вопросах</h2>
+      <p class="lede">В <code>data/test_queries.csv</code> 40 перефраз вида «что за универ аиту», у каждой указан правильный вопрос FAQ. Верными считаются и дубликаты, то есть вопросы с тем же текстом ответа.</p>
+      <div class="phases">
+        <div class="phase"><h4>P@1 и P@3</h4><p>Доля вопросов, где правильный ответ стоит на первом месте или хотя бы в топ-3.</p></div>
+        <div class="phase"><h4>MRR</h4><p>Среднее от 1 / место правильного ответа: 1-е место даёт 1, 2-е даёт 0.5, 3-е даёт 0.33, не нашёл — 0. Учитывает, насколько близко к верху был верный ответ.</p></div>
+      </div>
+      <div class="tbl">
+        <table class="eval">
+          <thead><tr><th class="num">Место</th><th>Метод</th><th>Обработка</th><th class="num">P@1</th><th class="num">P@3</th><th class="num">MRR</th><th class="num">мс / запрос</th><th class="num">Память, МБ</th></tr></thead>
+          <tbody>
+            <tr class="best"><td class="num">1</td><td class="mname"><span class="dot" style="background:var(--m1)"></span>Rule-based</td><td>лемматизация</td><td class="num">0.525</td><td class="num">0.750</td><td class="num">0.621</td><td class="num">0.62</td><td class="num">0.03</td></tr>
+            <tr><td class="num">2</td><td class="mname"><span class="dot" style="background:var(--m3)"></span>TF-IDF</td><td>лемматизация</td><td class="num">0.500</td><td class="num">0.725</td><td class="num">0.596</td><td class="num">1.16</td><td class="num">0.21</td></tr>
+            <tr><td class="num">3</td><td class="mname"><span class="dot" style="background:var(--m2)"></span>Bag of Words</td><td>лемматизация</td><td class="num">0.525</td><td class="num">0.675</td><td class="num">0.592</td><td class="num">1.12</td><td class="num">0.07</td></tr>
+            <tr><td class="num">4</td><td class="mname"><span class="dot" style="background:var(--m1)"></span>Rule-based</td><td>стемминг</td><td class="num">0.475</td><td class="num">0.625</td><td class="num">0.538</td><td class="num">0.42</td><td class="num">0.03</td></tr>
+            <tr><td class="num">4</td><td class="mname"><span class="dot" style="background:var(--m2)"></span>Bag of Words</td><td>стемминг</td><td class="num">0.475</td><td class="num">0.600</td><td class="num">0.538</td><td class="num">0.85</td><td class="num">0.07</td></tr>
+            <tr><td class="num">6</td><td class="mname"><span class="dot" style="background:var(--m3)"></span>TF-IDF</td><td>стемминг</td><td class="num">0.425</td><td class="num">0.650</td><td class="num">0.525</td><td class="num">0.90</td><td class="num">0.20</td></tr>
+            <tr><td class="num">7</td><td class="mname"><span class="dot" style="background:var(--m4)"></span>Embeddings</td><td>нет</td><td class="num">0.375</td><td class="num">0.575</td><td class="num">0.463</td><td class="num">12.43</td><td class="num">449.63</td></tr>
+            <tr><td class="num">8</td><td class="mname"><span class="dot" style="background:var(--m5)"></span>pg_trgm</td><td>нижний регистр</td><td class="num">0.350</td><td class="num">0.550</td><td class="num">0.429</td><td class="num">12.04</td><td class="num">0.38</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ol class="steps">
+        <li><div><h3>Лемматизация лучше стемминга</h3><p>Все три метода с лемматизацией заняли первые три места. Причина видна в разделе 04: стеммер портит слова вроде «стоит» → «сто».</p></div></li>
+        <li><div><h3>Простой метод с правилами на первом месте</h3><p>Тестовые вопросы написаны разговорным языком («универ», «общага»), а именно это и закрывают правила.</p></div></li>
+        <li><div><h3>Embeddings дороги и здесь не лучшие</h3><p>В 20 раз медленнее и в тысячи раз тяжелее, а MRR ниже. При этом на перефразах без общих слов только они и находят ответ, так что для бота они полезны как дополнительный голос.</p></div></li>
+        <li><div><h3>40 вопросов — маленькая выборка</h3><p>Один вопрос меняет P@1 на 0.025. Разница между соседними местами может быть случайной, поэтому в планах (<code>docs/ROADMAP.md</code>) расширение набора и доверительные интервалы.</p></div></li>
+      </ol>
+    </section>
+
+    <section id="order" class="read-order">
+      <div class="eyebrow">09 · Как разбираться в коде</div>
+      <h2>Порядок чтения</h2>
+      <p class="lede">Порядок совпадает с путём данных. После каждого шага есть вопрос для самопроверки.</p>
+      <ol class="steps">
+        <li><div><h3>data_prep/ <code>download → cleaning → storage</code></h3><p>Откуда данные и почему из 608 строк осталось 556.</p><p class="q">Почему при противоречии оставляется самый длинный ответ и чем это плохо?</p></div></li>
+        <li><div><h3>sql/init/01_schema.sql <code>docs/er_diagram.md</code></h3><p>13 таблиц, связи, третья нормальная форма.</p><p class="q">Зачем requests отдельно от method_runs? Почему feedback не привязан к методу?</p></div></li>
+        <li><div><h3>preprocessing/</h3><p>Нормализация, слова, стоп-слова, стемминг или лемматизация.</p><p class="q">Почему «как» и «сколько» не удаляются? Чем стемма отличается от леммы?</p></div></li>
+        <li><div><h3>methods/base.py</h3><p>Общий интерфейс fit / scores / search и замер памяти через pickle.</p><p class="q">Почему память embeddings считается вместе с моделью?</p></div></li>
+        <li><div><h3>methods/ <code>rule_based → bow → tfidf → embeddings → pg_trgm</code></h3><p>От простого к сложному, в каждом файле алгоритм по шагам в начале.</p><p class="q">Посчитайте сходство руками на одном примере для каждого метода.</p></div></li>
+        <li><div><h3>data_prep/term_index.py <code>queries.sql</code></h3><p>Обратный индекс и TF-IDF, посчитанный в SQL (frequent_terms, tfidf_keywords).</p><p class="q">Совпадают ли ключевые слова из SQL с весами TfidfVectorizer? Почему могут не совпадать?</p></div></li>
+        <li><div><h3>search/ <code>runner.py, history.py</code></h3><p>build_methods, compare_all, запись запросов, кандидатов и отзывов.</p><p class="q">Что пишется в базу на один вопрос пользователя?</p></div></li>
+        <li><div><h3>sql/init/03_views.sql</h3><p>v_method_answers и v_unanswered: когда ответ засчитан, а когда нет.</p><p class="q">Почему 👍 одному ответу означает 👎 остальным методам? Где это допущение ломается?</p></div></li>
+        <li><div><h3>analytics/evaluation.py <code>init_project.py</code></h3><p>Тестовый набор, допустимые ответы, P@1, P@3, MRR.</p><p class="q">Посчитайте MRR руками на трёх запросах.</p></div></li>
+        <li><div><h3>analytics/stats.py <code>dashboard.py, bot.py</code></h3><p>Интерфейс поверх всего остального.</p></div></li>
+      </ol>
+    </section>
+
+    <section id="run">
+      <div class="eyebrow">10 · Запуск</div>
+      <h2>Команды</h2>
+<div class="cmd"><span class="c"># один раз</span>
+cp .env.example .env                 <span class="c"># пароль базы, TELEGRAM_BOT_TOKEN, DASHBOARD_KEY</span>
+docker-compose up -d                 <span class="c"># PostgreSQL</span>
+python -m venv .venv &amp;&amp; .venv/bin/pip install -r requirements.txt
+.venv/bin/python init_project.py     <span class="c"># FAQ, индекс, оценка (--force — пересчитать)</span>
+
+<span class="c"># проверить отдельные части</span>
+.venv/bin/python -m data_prep.pipeline        <span class="c"># подготовка данных целиком</span>
+.venv/bin/python -m data_prep.term_index      <span class="c"># перестроить обратный индекс</span>
+.venv/bin/python -m search.runner             <span class="c"># все методы на трёх запросах</span>
+.venv/bin/python -m analytics.evaluation      <span class="c"># метрики на тестовых вопросах</span>
+.venv/bin/python -m analytics.stats           <span class="c"># статистика в консоли</span>
+.venv/bin/python -m analytics.queries_runner  <span class="c"># SQL-аналитика → results/sql/*.csv</span>
+
+<span class="c"># приложение</span>
+.venv/bin/streamlit run dashboard.py          <span class="c"># http://localhost:8501</span>
+.venv/bin/python bot.py</div>
+    </section>
+
+    <footer>Все цифры получены на текущей базе проекта: 556 вопросов FAQ, 40 тестовых вопросов. Время поиска зависит от машины.</footer>
+  </main>
+</div>
